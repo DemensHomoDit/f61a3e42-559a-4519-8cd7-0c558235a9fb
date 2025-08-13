@@ -19,6 +19,18 @@ dist-ssr
 .DS_Store
 *.suo
 *.ntvs*
+
+# Node.js project files
+node_modules
+dist
+build
+.cache
+
 *.njsproj
 *.sln
 *.sw?
+dist
+build
+.cache
+*.log
+

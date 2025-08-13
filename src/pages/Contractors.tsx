@@ -1,7 +1,26 @@
-import { Layout } from "@/components/Layout";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Helmet } from "react-helmet-async";
+import { useQuery } from "@tanstack/react-query";
+import { getContractors } from "@/api/client";
+import { 
+  Box, 
+  VStack, 
+  HStack, 
+  Heading, 
+  Text, 
+  Card, 
+  CardHeader, 
+  CardBody,
+  Button,
+  Badge,
+  Table,
+  Thead,
+  Tbody,
+  Tr,
+  Th,
+  Td
+} from "@chakra-ui/react";
+import { Plus, Building } from "lucide-react";
+import { downloadCSV } from "@/lib/export";
 
 const canonical = typeof window !== 'undefined' ? window.location.href : '';
 
@@ -16,17 +35,23 @@ const Contractors = () => {
   ];
 
   return (
-    <Layout>
+    <>
       <Helmet>
-        <title>Подрядчики и поставщики — ПромСтрой Контроль</title>
-        <meta name="description" content="Карточки подрядчиков и поставщиков: качество, сроки и условия." />
+        <title>Подрядчики — ПромСтрой Контроль</title>
+        <meta name="description" content="Управление подрядчиками: контакты, договоры, работы." />
         <link rel="canonical" href={canonical} />
       </Helmet>
-      <main className="space-y-6 animate-fade-in" role="main">
-        <header>
-          <h1 className="text-3xl font-bold text-primary">Подрядчики и поставщики</h1>
-          <p className="text-muted-foreground mt-1">История работ и условия поставок</p>
-        </header>
+      <Box as="main" role="main" display="flex" flexDirection="column" gap={6} className="animate-fade-in" maxW="1200px" mx="auto">
+        <HStack justify="space-between" align="center">
+          <Box>
+            <Heading size="lg" color="brand.500">Подрядчики</Heading>
+            <Text color="text.secondary" mt={1}>Управление подрядчиками</Text>
+          </Box>
+          <HStack>
+            <Button variant="gradient" leftIcon={<Plus />}>Добавить подрядчика</Button>
+            <Button variant="gradient" onClick={() => downloadCSV('contractors.csv', contractors)}>Экспорт CSV</Button>
+          </HStack>
+        </HStack>
 
         <section className="grid gap-6 md:grid-cols-2" aria-label="Подрядчики">
           {contractors.map((c)=>(
@@ -59,8 +84,8 @@ const Contractors = () => {
             </Card>
           ))}
         </section>
-      </main>
-    </Layout>
+      </Box>
+    </>
   );
 };
 

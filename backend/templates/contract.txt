@@ -1,0 +1,32 @@
+
+ДОГОВОР ПОДРЯДА № {{ contract_number }}
+{{ contract_date }}
+
+ЗАКАЗЧИК: {{ customer_name }}
+{% if customer_details %}{{ customer_details }}{% endif %}
+
+ПОДРЯДЧИК: ООО "УграСтройГрупп"
+ИНН: 8601234567, КПП: 860101001
+Адрес: г. Сургут, ул. Энергетиков, д. 1
+
+ПРЕДМЕТ ДОГОВОРА:
+{{ work_description }}
+
+Объект: {{ object_name }}
+{% if object_address %}Адрес объекта: {{ object_address }}{% endif %}
+
+СТОИМОСТЬ РАБОТ: {{ total_amount }} рублей
+{% if total_amount_words %}({{ total_amount_words }}){% endif %}
+
+СРОКИ ВЫПОЛНЕНИЯ:
+Начало работ: {{ start_date }}
+Окончание работ: {{ end_date }}
+
+Срок действия договора: до {{ contract_end_date }}
+
+ПОДПИСИ СТОРОН:
+
+ЗАКАЗЧИК: _________________
+
+ПОДРЯДЧИК: _________________ 
+           (директор)

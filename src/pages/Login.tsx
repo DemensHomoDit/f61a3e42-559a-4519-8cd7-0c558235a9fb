@@ -1,61 +1,72 @@
-import React, { useState } from 'react';
-import {
-  Box,
-  VStack,
-  Heading,
-  Text,
-  FormControl,
-  FormLabel,
-  Input,
-  Button,
-  useToast,
-  Card,
-  CardBody,
-  InputGroup,
-  InputRightElement,
-  IconButton,
-  useColorModeValue,
-  Container,
-  Alert,
-  AlertIcon,
-  AlertTitle,
-  AlertDescription
-} from '@chakra-ui/react';
-import { Eye, EyeOff, Building2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate, Navigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useToast } from '@/hooks/use-toast';
+import { Eye, EyeOff, Info } from 'lucide-react';
+import { Helmet } from 'react-helmet-async';
 
 const Login = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
   
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
-  const toast = useToast();
+  const { toast } = useToast();
   const navigate = useNavigate();
-  
-  const bgColor = useColorModeValue('gray.50', 'gray.900');
-  const cardBg = useColorModeValue('white', 'gray.800');
-  const borderColor = useColorModeValue('gray.200', 'gray.700');
 
-  // Если уже авторизован, перенаправляем на главную
+  // Анимация логотипа при первой загрузке
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowSplash(false);
+    }, 2500); // Показываем логотип 2.5 секунды
+
+    return () => clearTimeout(timer);
+  }, []);
+
   if (authLoading) {
     return (
-      <Box 
-        display="flex" 
-        alignItems="center" 
-        justifyContent="center" 
-        minH="100vh"
-        bg={bgColor}
-      >
-        <Text>Загрузка...</Text>
-      </Box>
+      <div className="min-h-screen bg-gradient-subtle flex items-center justify-center">
+        <div className="animate-nature-pulse">
+          <div className="h-12 w-12 border-4 border-nature-young-spruce border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      </div>
     );
   }
 
   if (isAuthenticated) {
     return <Navigate to="/" replace />;
+  }
+
+  // Splash screen с логотипом
+  if (showSplash) {
+    return (
+      <>
+        <Helmet>
+          <title>Вход в систему | UgraBuilders</title>
+        </Helmet>
+        <div className="fixed inset-0 bg-gradient-forest flex items-center justify-center z-50">
+          <div className="text-center animate-fade-in">
+            <div className="mb-8 animate-scale-bounce">
+              <img 
+                src="/lovable-uploads/2bb979f2-5d6d-4de0-91d5-7eb13528c6be.png" 
+                alt="UgraBuilders"
+                className="w-80 h-auto mx-auto animate-leaf-float"
+              />
+            </div>
+            <div className="text-white text-xl font-medium animate-fade-in opacity-80">
+              Система управления строительством
+            </div>
+          </div>
+        </div>
+      </>
+    );
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -65,9 +76,7 @@ const Login = () => {
       toast({
         title: 'Ошибка',
         description: 'Заполните все поля',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
+        variant: 'destructive',
       });
       return;
     }
@@ -81,27 +90,20 @@ const Login = () => {
         toast({
           title: 'Успешный вход',
           description: 'Добро пожаловать в систему!',
-          status: 'success',
-          duration: 3000,
-          isClosable: true,
         });
         navigate('/');
       } else {
         toast({
           title: 'Ошибка входа',
           description: 'Неверное имя пользователя или пароль',
-          status: 'error',
-          duration: 3000,
-          isClosable: true,
+          variant: 'destructive',
         });
       }
     } catch (error) {
       toast({
         title: 'Ошибка',
         description: 'Произошла ошибка при входе. Попробуйте еще раз.',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
+        variant: 'destructive',
       });
     } finally {
       setIsLoading(false);
@@ -109,111 +111,117 @@ const Login = () => {
   };
 
   return (
-    <Box 
-      minH="100vh" 
-      bg={bgColor}
-      display="flex"
-      alignItems="center"
-      justifyContent="center"
-      py={8}
-    >
-      <Container maxW="md">
-        <VStack spacing={8}>
+    <>
+      <Helmet>
+        <title>Вход в систему | UgraBuilders</title>
+        <meta name="description" content="Вход в систему управления строительными проектами" />
+      </Helmet>
+
+      <div className="min-h-screen bg-gradient-subtle flex items-center justify-center p-8">
+        <div className="w-full max-w-md space-y-8 animate-fade-in">
           {/* Логотип и заголовок */}
-          <VStack spacing={4} textAlign="center">
-            <Box
-              p={4}
-              bg="green.500"
-              borderRadius="full"
-              color="white"
-              fontSize="3xl"
-            >
-              <Building2 />
-            </Box>
-            <Heading size="lg" color="gray.700">
-              ПромСтрой Контроль
-            </Heading>
-            <Text color="gray.600" fontSize="lg">
-              Система управления строительными проектами
-            </Text>
-          </VStack>
+          <div className="text-center space-y-6">
+            <div className="hover-lift">
+              <img 
+                src="/lovable-uploads/2bb979f2-5d6d-4de0-91d5-7eb13528c6be.png" 
+                alt="UgraBuilders"
+                className="w-64 h-auto mx-auto animate-leaf-float"
+              />
+            </div>
+            <div className="space-y-2">
+              <h1 className="text-2xl font-bold bg-gradient-forest bg-clip-text text-transparent">
+                Добро пожаловать
+              </h1>
+              <p className="text-muted-foreground">
+                Войдите в систему управления строительством
+              </p>
+            </div>
+          </div>
 
           {/* Форма входа */}
-          <Card w="full" bg={cardBg} border="1px solid" borderColor={borderColor}>
-            <CardBody p={8}>
-              <form onSubmit={handleSubmit}>
-                <VStack spacing={6}>
-                  <FormControl isRequired>
-                    <FormLabel>Имя пользователя</FormLabel>
+          <Card className="card-nature shadow-elevated">
+            <CardHeader className="space-y-2 text-center">
+              <CardTitle className="text-xl">Вход в систему</CardTitle>
+              <CardDescription>
+                Введите свои учетные данные для доступа
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="username">Имя пользователя</Label>
+                  <Input
+                    id="username"
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="Введите имя пользователя"
+                    className="transition-all duration-300 focus:shadow-glow"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="password">Пароль</Label>
+                  <div className="relative">
                     <Input
-                      type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      placeholder="Введите имя пользователя"
-                      size="lg"
-                      title="Имя пользователя"
-                      aria-label="Поле для ввода имени пользователя"
+                      id="password"
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Введите пароль"
+                      className="pr-12 transition-all duration-300 focus:shadow-glow"
+                      required
                     />
-                  </FormControl>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
 
-                  <FormControl isRequired>
-                    <FormLabel>Пароль</FormLabel>
-                    <InputGroup size="lg">
-                      <Input
-                        type={showPassword ? 'text' : 'password'}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="Введите пароль"
-                        title="Пароль"
-                        aria-label="Поле для ввода пароля"
-                      />
-                      <InputRightElement>
-                        <IconButton
-                          aria-label={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
-                          icon={showPassword ? <EyeOff /> : <Eye />}
-                          onClick={() => setShowPassword(!showPassword)}
-                          variant="ghost"
-                          size="sm"
-                        />
-                      </InputRightElement>
-                    </InputGroup>
-                  </FormControl>
-
-                  <Button
-                    type="submit"
-                    colorScheme="green"
-                    size="lg"
-                    w="full"
-                    isLoading={isLoading}
-                    loadingText="Вход..."
-                  >
-                    Войти в систему
-                  </Button>
-                </VStack>
+                <Button
+                  type="submit"
+                  className="w-full btn-nature"
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <div className="flex items-center gap-2">
+                      <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Вход...
+                    </div>
+                  ) : (
+                    'Войти в систему'
+                  )}
+                </Button>
               </form>
-            </CardBody>
+            </CardContent>
           </Card>
 
-          {/* Информация о системе */}
-          <VStack spacing={4} textAlign="center" maxW="md">
-            <Alert status="info" borderRadius="md">
-              <AlertIcon />
-              <Box>
-                <AlertTitle>Информация для входа</AlertTitle>
-                <AlertDescription>
-                  Используйте логин <strong>DemensHomo</strong> и пароль <strong>8950Madmax</strong> для входа в систему.
-                </AlertDescription>
-              </Box>
-            </Alert>
-            
-            <Text fontSize="sm" color="gray.500">
-              Система управления строительными объектами, задачами, финансами и персоналом
-            </Text>
-          </VStack>
-        </VStack>
-      </Container>
-    </Box>
+          {/* Демо данные */}
+          <Alert className="glass-effect border-nature-morning-mist">
+            <Info className="h-4 w-4" />
+            <AlertDescription>
+              <strong>Демо доступ:</strong><br />
+              Логин: <code className="bg-muted px-1 rounded">DemensHomo</code><br />
+              Пароль: <code className="bg-muted px-1 rounded">8950Madmax</code>
+            </AlertDescription>
+          </Alert>
+
+          {/* Дополнительная информация */}
+          <div className="text-center text-sm text-muted-foreground">
+            <p>Система управления строительными объектами,</p>
+            <p>задачами, финансами и персоналом</p>
+          </div>
+        </div>
+      </div>
+    </>
   );
 };
 
-export default Login; 
+export default Login;

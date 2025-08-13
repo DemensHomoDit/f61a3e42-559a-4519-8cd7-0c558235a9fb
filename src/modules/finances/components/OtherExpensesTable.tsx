@@ -4,22 +4,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getOtherExpenses, createOtherExpense, updateOtherExpense, deleteOtherExpense, getSuppliers } from "@/api/client";
 import { Edit, Trash2, Plus } from "lucide-react";
 
-interface OtherExpense {
-  id: number;
-  category: string;
-  amount: number;
-  date: string;
-  object_id?: number;
-  supplier_id?: number;
-  description?: string;
-  payment_status?: string; // unpaid | paid | partial
-  due_date?: string;
-}
+import type { OtherExpense } from "@/types";
 
 export function OtherExpensesTable({ objects }: { objects: any[] }) {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const qc = useQueryClient();
-  const { data: rows = [] } = useQuery<OtherExpense[]>({ queryKey: ['other_expenses'], queryFn: getOtherExpenses, retry: 0, refetchOnWindowFocus: false });
+  const { data: rows = [] } = useQuery({ queryKey: ['other_expenses'], queryFn: getOtherExpenses, retry: 0, refetchOnWindowFocus: false });
   const { data: suppliers = [] } = useQuery<any[]>({ queryKey: ['suppliers'], queryFn: getSuppliers, retry: 0, refetchOnWindowFocus: false });
 
   const [selectedObject, setSelectedObject] = useState<string>('');
@@ -56,7 +46,7 @@ export function OtherExpensesTable({ objects }: { objects: any[] }) {
   });
   const deleteMut = useMutation({ mutationFn: async (id: number)=> deleteOtherExpense(id), onSuccess: ()=> qc.invalidateQueries({ queryKey: ['other_expenses'] }) });
 
-  const filtered = useMemo(()=> rows.filter(r=> {
+  const filtered = useMemo(() => (rows as any[]).filter((r: any) => {
     if (selectedObject && String(r.object_id||'') !== selectedObject) return false;
     if (selectedStatus && String(r.payment_status||'') !== selectedStatus) return false;
     if (selectedCategory && String(r.category||'') !== selectedCategory) return false;
@@ -70,7 +60,7 @@ export function OtherExpensesTable({ objects }: { objects: any[] }) {
     setForm({ category: '', amount: '', date: new Date().toISOString().slice(0,10), object_id: '', supplier_id: '', description: '', payment_status: 'unpaid', due_date: '' });
   }
 
-  function openEdit(row?: OtherExpense) {
+  function openEdit(row?: any) {
     if (row) {
       setEditing(row);
       setForm({

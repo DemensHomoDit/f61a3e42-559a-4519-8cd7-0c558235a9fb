@@ -403,6 +403,7 @@ export interface CashTransaction {
   user_id?: number;
   category?: string;
   payment_method?: string;
+  notes?: string;
   created_at?: string;
 }
 
@@ -423,8 +424,10 @@ export interface OtherExpense {
   amount: number;
   date?: string;
   object_id?: number;
-  category: string;
+  category?: string;
   supplier_id?: number;
+  payment_status?: string;
+  due_date?: string;
   created_at?: string;
 }
 

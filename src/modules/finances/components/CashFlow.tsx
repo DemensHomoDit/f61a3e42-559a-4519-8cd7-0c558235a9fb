@@ -4,19 +4,7 @@ import { Plus, Edit, Trash2, TrendingUp, TrendingDown, DollarSign, CreditCard, W
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getCashTransactions, createCashTransaction, updateCashTransaction, deleteCashTransaction } from "@/api/client";
 
-interface CashTransaction {
-  id: number;
-  type: 'income' | 'expense';
-  amount: number;
-  category: string;
-  description: string;
-  date: string;
-  payment_method: string;
-  object_id?: number;
-  user_id?: number;
-  receipt_url?: string;
-  notes?: string;
-}
+import type { CashTransaction } from "@/types";
 
 interface CashFlowProps {
   objects: any[];
@@ -43,11 +31,11 @@ export const CashFlow = ({ objects, users }: CashFlowProps) => {
     notes: ''
   });
 
-  const { data: transactions = [] } = useQuery<CashTransaction[]>({ queryKey: ['cash'], queryFn: getCashTransactions, retry: 0, refetchOnWindowFocus: false });
+  const { data: transactions = [] } = useQuery({ queryKey: ['cash'], queryFn: getCashTransactions, retry: 0, refetchOnWindowFocus: false });
 
   const createMut = useMutation({
     mutationFn: async () => createCashTransaction({
-      type: formData.type,
+      type: formData.type as 'income' | 'expense',
       amount: Number(formData.amount) || 0,
       category: formData.category || null,
       description: formData.description || null,
@@ -61,7 +49,7 @@ export const CashFlow = ({ objects, users }: CashFlowProps) => {
   });
   const updateMut = useMutation({
     mutationFn: async () => editingTransaction ? updateCashTransaction(editingTransaction.id, {
-      type: formData.type,
+      type: formData.type as 'income' | 'expense',
       amount: Number(formData.amount) || 0,
       category: formData.category || null,
       description: formData.description || null,
@@ -105,34 +93,35 @@ export const CashFlow = ({ objects, users }: CashFlowProps) => {
   ];
 
   const filteredTransactions = useMemo(() => {
-    return transactions.filter(item => {
+    return (transactions as any[]).filter((item: any) => {
       if (selectedType && item.type !== selectedType) return false;
       if (selectedCategory && item.category !== selectedCategory) return false;
       if (selectedObject && item.object_id !== Number(selectedObject)) return false;
-      if (selectedMonth && item.date.slice(5, 7) !== selectedMonth) return false;
+      if (selectedMonth && item.date?.slice(5, 7) !== selectedMonth) return false;
       return true;
     });
   }, [transactions, selectedType, selectedCategory, selectedObject, selectedMonth]);
 
   const cashSummary = useMemo(() => {
-    const totalIncome = transactions
-      .filter(t => t.type === 'income')
-      .reduce((sum, t) => sum + (t.amount || 0), 0);
+    const txs = transactions as any[];
+    const totalIncome = txs
+      .filter((t: any) => t.type === 'income')
+      .reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
     
-    const totalExpenses = transactions
-      .filter(t => t.type === 'expense')
-      .reduce((sum, t) => sum + (t.amount || 0), 0);
+    const totalExpenses = txs
+      .filter((t: any) => t.type === 'expense')
+      .reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
     
     const balance = totalIncome - totalExpenses;
     
     const byMethod = paymentMethods.map(method => {
-      const methodTransactions = transactions.filter(t => t.payment_method === method.value);
+      const methodTransactions = txs.filter((t: any) => t.payment_method === method.value);
       const methodIncome = methodTransactions
-        .filter(t => t.type === 'income')
-        .reduce((sum, t) => sum + (t.amount || 0), 0);
+        .filter((t: any) => t.type === 'income')
+        .reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
       const methodExpenses = methodTransactions
-        .filter(t => t.type === 'expense')
-        .reduce((sum, t) => sum + (t.amount || 0), 0);
+        .filter((t: any) => t.type === 'expense')
+        .reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
       
       return {
         ...method,
@@ -165,7 +154,7 @@ export const CashFlow = ({ objects, users }: CashFlowProps) => {
     setEditingTransaction(null);
   };
 
-  const handleEdit = (transaction: CashTransaction) => {
+  const handleEdit = (transaction: any) => {
     setEditingTransaction(transaction);
     setFormData({
       type: transaction.type,

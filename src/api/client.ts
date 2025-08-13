@@ -210,6 +210,8 @@ export function deleteOtherExpense(id: number) { return fetchJson<{ success: boo
 export function getFinanceJournal() { return fetchJson<any[]>("/api/finance/journal"); }
 export function getReceivables() { return fetchJson<any[]>("/api/finance/receivables"); }
 export function getPayables() { return fetchJson<any[]>("/api/finance/payables"); }
+export function getAnalytics() { return fetchJson<any>("/api/analytics"); }
+export function getContractors() { return fetchJson<any[]>("/api/contractors"); }
 export function getPnL() { return fetchJson<any>("/api/finance/pnl"); }
 export function getCashFlow() { return fetchJson<any>("/api/finance/cashflow"); }
 

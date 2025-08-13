@@ -8,109 +8,124 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 220 20% 97%;
-    --foreground: 224 15% 15%;
+    /* Природная палитра - основа */
+    --deep-pine: 140 36% 22%; /* #2E4D38 - Глубокая хвоя */
+    --young-spruce: 140 28% 34%; /* #3F6B4E - Молодая ель */
+    --cold-moss: 115 7% 52%; /* #7B8E78 - Холодный мох */
+    --forest-grass: 110 26% 64%; /* #9BBF87 - Лесная трава */
+    --pine-cone: 25 25% 34%; /* #6B4F3F - Хвойная шишка */
+    --morning-mist: 120 10% 87%; /* #DCE1DF - Утренний туман */
+    
+    /* Дополнительные древесные оттенки */
+    --dark-bark: 30 25% 22%; /* #4A3B2A - Тёмная кора */
+    --young-bark: 30 30% 36%; /* #7B5E3B - Молодая кора */
+    --summer-leaf: 90 28% 34%; /* #4F6F3E - Лист летний */
+    --spring-leaf: 90 26% 60%; /* #8FBF72 - Лист весенний */
+    --dry-leaf: 32 41% 51%; /* #B97B4E - Сухой лист */
+    --silver-birch: 45 11% 82%; /* #D9D6CF - Серебристая берёза */
+
+    /* Основные цвета системы */
+    --background: 0 0% 100%; /* Белый фон */
+    --foreground: var(--deep-pine);
 
     --card: 0 0% 100%;
-    --card-foreground: 224 15% 15%;
+    --card-foreground: var(--deep-pine);
 
     --popover: 0 0% 100%;
-    --popover-foreground: 224 15% 15%;
+    --popover-foreground: var(--deep-pine);
 
-    --primary: 217 87% 25%;
+    --primary: var(--young-spruce);
     --primary-foreground: 0 0% 98%;
 
-    --secondary: 220 15% 92%;
-    --secondary-foreground: 217 87% 25%;
+    --secondary: var(--morning-mist);
+    --secondary-foreground: var(--deep-pine);
 
-    --muted: 220 15% 95%;
-    --muted-foreground: 224 10% 45%;
+    --muted: var(--silver-birch);
+    --muted-foreground: var(--cold-moss);
 
-    --accent: 32 95% 58%;
+    --accent: var(--spring-leaf);
     --accent-foreground: 0 0% 98%;
 
-    --success: 144 61% 44%;
+    --success: var(--forest-grass);
     --success-foreground: 0 0% 98%;
 
-    --warning: 43 89% 58%;
+    --warning: var(--dry-leaf);
     --warning-foreground: 0 0% 98%;
 
-    --destructive: 0 84% 60%;
+    --destructive: 0 65% 50%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 220 15% 88%;
-    --input: 220 15% 88%;
-    --ring: 217 87% 25%;
+    --border: var(--morning-mist);
+    --input: var(--morning-mist);
+    --ring: var(--young-spruce);
 
-    --construction-blue: 217 87% 25%;
-    --construction-orange: 32 95% 58%;
-    --construction-gray: 224 10% 45%;
-    --construction-light: 220 20% 97%;
+    /* Градиенты */
+    --gradient-forest: linear-gradient(135deg, hsl(var(--young-spruce)), hsl(var(--deep-pine)));
+    --gradient-nature: linear-gradient(135deg, hsl(var(--spring-leaf)), hsl(var(--forest-grass)));
+    --gradient-earth: linear-gradient(135deg, hsl(var(--pine-cone)), hsl(var(--dark-bark)));
+    --gradient-subtle: linear-gradient(180deg, hsl(var(--background)), hsl(var(--morning-mist)));
+    --gradient-card: linear-gradient(135deg, hsl(0 0% 100%), hsl(var(--silver-birch)));
     
-    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--construction-blue)));
-    --gradient-accent: linear-gradient(135deg, hsl(var(--accent)), hsl(32 95% 65%));
-    --gradient-subtle: linear-gradient(180deg, hsl(var(--background)), hsl(220 15% 95%));
+    /* Тени с природными оттенками */
+    --shadow-nature: 0 4px 20px -2px hsl(var(--young-spruce) / 0.12);
+    --shadow-elevated: 0 8px 30px -4px hsl(var(--deep-pine) / 0.15);
+    --shadow-glow: 0 0 40px hsl(var(--spring-leaf) / 0.2);
     
-    --shadow-construction: 0 4px 20px -2px hsl(var(--primary) / 0.15);
-    --shadow-elevated: 0 8px 30px -4px hsl(var(--primary) / 0.25);
-    
-    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    /* Анимации */
+    --transition-smooth: all 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
+    --transition-bounce: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
 
-    --radius: 0.5rem;
+    --radius: 12px;
 
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
+    /* Сайдбар */
+    --sidebar-background: hsl(var(--morning-mist));
+    --sidebar-foreground: hsl(var(--deep-pine));
+    --sidebar-primary: hsl(var(--young-spruce));
     --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: hsl(var(--silver-birch));
+    --sidebar-accent-foreground: hsl(var(--deep-pine));
+    --sidebar-border: hsl(var(--morning-mist));
+    --sidebar-ring: hsl(var(--spring-leaf));
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    /* Тёмная тема с природными оттенками */
+    --background: var(--dark-bark);
+    --foreground: var(--morning-mist);
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: var(--deep-pine);
+    --card-foreground: var(--morning-mist);
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: var(--deep-pine);
+    --popover-foreground: var(--morning-mist);
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: var(--spring-leaf);
+    --primary-foreground: var(--dark-bark);
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: var(--pine-cone);
+    --secondary-foreground: var(--morning-mist);
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: var(--young-bark);
+    --muted-foreground: var(--cold-moss);
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: var(--forest-grass);
+    --accent-foreground: var(--dark-bark);
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 65% 50%;
+    --destructive-foreground: var(--morning-mist);
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --border: var(--pine-cone);
+    --input: var(--pine-cone);
+    --ring: var(--spring-leaf);
+
+    --sidebar-background: hsl(var(--deep-pine));
+    --sidebar-foreground: hsl(var(--morning-mist));
+    --sidebar-primary: hsl(var(--spring-leaf));
+    --sidebar-primary-foreground: hsl(var(--dark-bark));
+    --sidebar-accent: hsl(var(--pine-cone));
+    --sidebar-accent-foreground: hsl(var(--morning-mist));
+    --sidebar-border: hsl(var(--pine-cone));
+    --sidebar-ring: hsl(var(--forest-grass));
   }
 }
 
@@ -120,6 +135,111 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans antialiased;
+    background-image: var(--gradient-subtle);
+    min-height: 100vh;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer components {
+  /* Природные градиенты */
+  .bg-gradient-forest {
+    background: var(--gradient-forest);
+  }
+  
+  .bg-gradient-nature {
+    background: var(--gradient-nature);
+  }
+  
+  .bg-gradient-earth {
+    background: var(--gradient-earth);
+  }
+  
+  .bg-gradient-card {
+    background: var(--gradient-card);
+  }
+
+  /* Современные тени */
+  .shadow-nature {
+    box-shadow: var(--shadow-nature);
+  }
+  
+  .shadow-elevated {
+    box-shadow: var(--shadow-elevated);
+  }
+  
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
+  }
+
+  /* Природные интерактивные эффекты */
+  .hover-lift {
+    @apply transition-all duration-300 hover:scale-105 hover:shadow-elevated;
+  }
+  
+  .hover-glow {
+    @apply transition-all duration-300 hover:shadow-glow;
+  }
+
+  /* Анимации листьев */
+  .animate-leaf-float {
+    animation: leaf-float 6s ease-in-out infinite;
+  }
+  
+  .animate-nature-pulse {
+    animation: nature-pulse 2s ease-in-out infinite;
+  }
+
+  /* Крутые кнопки */
+  .btn-nature {
+    @apply bg-gradient-forest text-white px-6 py-3 rounded-xl font-medium;
+    @apply hover:scale-105 hover:shadow-glow transition-all duration-300;
+    @apply active:scale-95;
+  }
+  
+  .btn-earth {
+    @apply bg-gradient-earth text-white px-6 py-3 rounded-xl font-medium;
+    @apply hover:scale-105 hover:shadow-elevated transition-all duration-300;
+    @apply active:scale-95;
+  }
+
+  /* Карточки с природной эстетикой */
+  .card-nature {
+    @apply bg-card border border-border rounded-2xl p-6;
+    @apply hover-lift shadow-nature backdrop-blur-sm;
+    background: var(--gradient-card);
+  }
+
+  /* Стеклянный эффект */
+  .glass-effect {
+    @apply backdrop-blur-md bg-white/80 border border-white/20;
+    @apply shadow-nature rounded-2xl;
+  }
+}
+
+@keyframes leaf-float {
+  0%, 100% { 
+    transform: translateY(0px) rotate(0deg); 
+  }
+  33% { 
+    transform: translateY(-10px) rotate(2deg); 
+  }
+  66% { 
+    transform: translateY(-5px) rotate(-1deg); 
+  }
+}
+
+@keyframes nature-pulse {
+  0%, 100% { 
+    opacity: 1; 
+    transform: scale(1); 
+  }
+  50% { 
+    opacity: 0.8; 
+    transform: scale(1.05); 
   }
 }

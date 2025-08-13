@@ -4,6 +4,10 @@ export interface User {
   full_name: string;
   position?: string | null;
   phone?: string | null;
+  email?: string | null;
+  username?: string | null;
+  gender?: string | null;
+  status?: string | null;
   is_admin?: number;
   role?: UserRole;
   permissions?: Permission[];
@@ -385,6 +389,7 @@ export interface Budget {
   actual_amount: number;
   month: string;
   year: number;
+  notes?: string;
   created_at?: string;
 }
 
@@ -396,6 +401,8 @@ export interface CashTransaction {
   date?: string;
   object_id?: number;
   user_id?: number;
+  category?: string;
+  payment_method?: string;
   created_at?: string;
 }
 
@@ -416,7 +423,8 @@ export interface OtherExpense {
   amount: number;
   date?: string;
   object_id?: number;
-  category?: string;
+  category: string;
+  supplier_id?: number;
   created_at?: string;
 }
 

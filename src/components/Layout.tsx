@@ -1,24 +1,18 @@
 import { AppSidebar } from "@/components/AppSidebar";
-import { Building2, Bell, Settings, User, Sparkles, Plus, Menu as MenuIcon, LogOut } from "lucide-react";
+import { Building2, Bell, Settings, User, Sparkles, Plus, Menu as MenuIcon, LogOut, Search } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { 
-  Box, 
-  HStack, 
-  Icon, 
-  Button, 
-  Input, 
-  InputGroup,
-  Menu,
-  MenuButton,
-  MenuList,
-  MenuItem,
-  MenuDivider,
-  Avatar,
-  useDisclosure,
-  Text,
-  Badge,
-  VStack,
-} from "@chakra-ui/react";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getObjects, getUsers, getTasks, setAuthToken } from "@/api/client";
@@ -57,97 +51,84 @@ export function Layout({ children }: LayoutProps) {
   };
 
   return (
-    <Box minH="100vh" display="flex" w="full">
+    <div className="min-h-screen bg-gradient-subtle flex w-full">
       <AppSidebar />
-      <Box flex={1} display="flex" flexDirection="column" ml={isExpanded ? "260px" : "80px"} transition="margin-left 0.3s ease">
-        <Box as="header" h="64px" bg="white" boxShadow="header" borderBottomWidth="1px" px={6} display="flex" alignItems="center" justifyContent="space-between" position="sticky" top={0} zIndex={5}>
-          <HStack spacing={4} align="center">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={toggleSidebar}
-              p={2}
-              minW="auto"
-              h="auto"
-            >
-              <Icon as={MenuIcon} boxSize={5} />
+      <div className="flex flex-col flex-1 transition-all duration-300" style={{ marginLeft: isExpanded ? '280px' : '80px' }}>
+        <header className="h-16 glass-effect border-b border-border/20 px-6 flex items-center justify-between sticky top-0 z-50">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="sm" onClick={toggleSidebar}>
+              <MenuIcon className="h-5 w-5" />
             </Button>
-            <HStack spacing={2}>
-              <Icon as={Building2} boxSize={6} color="brand.500" />
-              <Box as="span" fontWeight={600} fontSize="lg" color="brand.500">ПромСтрой Контроль</Box>
-            </HStack>
-          </HStack>
+            <div className="flex items-center gap-3">
+              <Building2 className="h-8 w-8 text-nature-young-spruce animate-leaf-float" />
+              <h1 className="font-bold text-xl bg-gradient-forest bg-clip-text text-transparent">
+                ПромСтрой Контроль
+              </h1>
+            </div>
+          </div>
 
-          <HStack spacing={3} w="full" maxW="2xl" mx={4}>
-            <Box position="relative" flex={1}>
-              <InputGroup>
-                <Input placeholder="Поиск: объекты, сотрудники, задачи…" value={q} onChange={(e)=>setQ(e.target.value)} />
-              </InputGroup>
-              {q && (
-                <Box position="absolute" zIndex={50} mt={1} w="full" rounded="md" borderWidth="1px" bg="white" p={2} maxH="60" overflowY="auto" boxShadow="card">
-                  {matches.length===0 && <Box fontSize="sm" color="text.secondary">Ничего не найдено</Box>}
-                  {matches.map((m, idx)=> (
-                    <Box key={idx} fontSize="sm" px={2} py={1} _hover={{ bg: "table.rowAlt" }} rounded="md">
-                      <Link to={m.to} onClick={()=>setQ("")}> <Box as="span" color="text.secondary" mr={2}>{m.type}:</Box> {m.label}</Link>
-                    </Box>
-                  ))}
-                </Box>
-              )}
-            </Box>
+          <div className="flex-1 max-w-2xl mx-8 relative">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input 
+                placeholder="Поиск объектов, сотрудников, задач..." 
+                value={q} 
+                onChange={(e) => setQ(e.target.value)}
+                className="pl-12 bg-white/80 backdrop-blur-sm border-nature-morning-mist"
+              />
+            </div>
+            {q && matches.length > 0 && (
+              <div className="absolute top-full mt-2 w-full glass-effect border border-border/20 rounded-2xl p-2 max-h-60 overflow-y-auto z-50">
+                {matches.map((match, idx) => (
+                  <Link key={idx} to={match.to} onClick={() => setQ("")} className="flex items-center gap-3 p-3 hover:bg-nature-morning-mist/50 rounded-xl">
+                    <Badge variant="secondary">{match.type}</Badge>
+                    <span>{match.label}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
             
-            {/* Add Button */}
-            <Menu>
-              <MenuButton as={Button} variant="gradient" leftIcon={<Icon as={Plus} boxSize={4} />}>
-                Добавить
-              </MenuButton>
-              <MenuList>
-                <MenuItem onClick={() => navigate('/objects')}>Новый объект</MenuItem>
-                <MenuItem onClick={() => navigate('/tasks')}>Новая задача</MenuItem>
-                <MenuItem onClick={() => navigate('/people')}>Новый сотрудник</MenuItem>
-                <MenuItem onClick={() => navigate('/materials')}>Новый материал</MenuItem>
-                <MenuDivider />
-                <MenuItem onClick={() => navigate('/finances')}>Новая закупка</MenuItem>
-              </MenuList>
-            </Menu>
+          <div className="flex items-center gap-3">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button className="btn-nature">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Добавить
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="glass-effect border-border/20 z-50">
+                <DropdownMenuItem onClick={() => navigate('/objects')}>Новый объект</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/tasks')}>Новая задача</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             
-            <Button variant="gradient" as={Link} to="/chat"><Icon as={Sparkles} boxSize={4} mr={2} />ИИ</Button>
-            <Button variant="gradient" as={Link} to="/notifications"><Icon as={Bell} boxSize={4} /></Button>
-            
-            {/* Admin Profile Menu */}
-            <Menu>
-              <MenuButton as={Button} variant="ghost" p={2}>
-                <Avatar size="sm" name={user?.full_name || 'Пользователь'} />
-              </MenuButton>
-              <MenuList>
-                <Box px={3} py={2} borderBottomWidth="1px">
-                  <VStack align="start" spacing={1}>
-                    <Text fontWeight="medium" fontSize="sm">
-                      {user?.full_name || 'Пользователь'}
-                    </Text>
-                    <Text fontSize="xs" color="gray.500">
-                      {user?.position || 'Должность не указана'}
-                    </Text>
-                    <Badge colorScheme="green" size="sm">
-                      {user?.role ? getRoleName(user.role) : 'Роль не назначена'}
-                    </Badge>
-                  </VStack>
-                </Box>
-                <MenuDivider />
-                <MenuItem as={Link} to="/settings">Настройки</MenuItem>
-                <MenuItem as={Link} to="/profile">Профиль</MenuItem>
-                <MenuDivider />
-                <MenuItem onClick={handleLogout} icon={<Icon as={LogOut} />}>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="p-2">
+                  <Avatar className="h-8 w-8">
+                    <AvatarFallback>{user?.full_name?.charAt(0) || 'П'}</AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="glass-effect border-border/20 w-64 z-50">
+                <div className="p-4 border-b">
+                  <p className="font-medium">{user?.full_name || 'Пользователь'}</p>
+                  <Badge variant="outline">{user?.role ? getRoleName(user.role) : 'Роль не назначена'}</Badge>
+                </div>
+                <DropdownMenuItem onClick={handleLogout}>
+                  <LogOut className="h-4 w-4 mr-2" />
                   Выйти
-                </MenuItem>
-              </MenuList>
-            </Menu>
-          </HStack>
-        </Box>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </header>
 
-        <Box as="main" flex={1} p={6}>
+        <main className="flex-1 p-8">
           {children}
-        </Box>
-      </Box>
-    </Box>
+        </main>
+      </div>
+    </div>
   );
 }

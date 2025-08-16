@@ -11,6 +11,22 @@ export interface User {
   is_admin?: number;
   role?: UserRole;
   permissions?: Permission[];
+  department?: string | null;
+  hire_date?: string | null;
+  salary?: number | null;
+  clothing_size?: string | null;
+  shoe_size?: string | null;
+  age?: number | null;
+  bad_habits?: string | null;
+  photo_url?: string | null;
+  // Бытовые поля
+  accommodation_type?: string | null;
+  accommodation_address?: string | null;
+  room_number?: string | null;
+  meals_included?: boolean | null;
+  transport_provided?: boolean | null;
+  transport_type?: string | null;
+  utilities_included?: boolean | null;
   created_at?: string;
   updated_at?: string;
 }

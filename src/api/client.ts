@@ -35,7 +35,16 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export function getObjects() { return fetchJson<ObjectEntity[]>("/api/objects"); }
-export function getUsers() { return fetchJson<User[]>("/api/users"); }
+export async function getObject(id: number): Promise<ObjectEntity | undefined> {
+  const all = await getObjects();
+  return all.find(o => o.id === id);
+}
+export function getUsers() { 
+  return fetchJson<User[]>("/api/users").then(users => users.map(u => ({
+    ...u,
+    photo_url: fileUrl(u.photo_url) || undefined,
+  })));
+}
 export function getTasks() { return fetchJson<Task[]>("/api/tasks"); }
 export function getPurchases() { return fetchJson<Purchase[]>("/api/purchases"); }
 export function getSalaries() { return fetchJson<Salary[]>("/api/salaries"); }
@@ -50,10 +59,26 @@ export function putSetting(key: string, value: unknown) {
   });
 }
 export function login(username: string, password: string) {
-  return fetchJson<{ token: string; user: User }>(`/api/auth/login`, {
+  return fetchJson<{ token: string; user: User; must_change_password?: boolean }>(`/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, password }),
+  });
+}
+
+export function createAuthUser(payload: { user_id: number; username: string; password: string; role?: string; }) {
+  return fetchJson<{ id: number; user_id: number; username: string; full_name?: string; role?: string; force_password_change?: number }>(`/api/auth/create-user`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function changePassword(payload: { username: string; old_password: string; new_password: string; }) {
+  return fetchJson<{ ok: boolean }>(`/api/auth/change-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
   });
 }
 export function me() { 
@@ -221,6 +246,18 @@ export function createWarehouseConsumption(payload: Partial<WarehouseConsumption
 export function updateWarehouseConsumption(id: number, payload: Partial<WarehouseConsumption>) { return fetchJson<WarehouseConsumption>(`/api/warehouse/consumption/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); }
 export function deleteWarehouseConsumption(id: number) { return fetchJson<{ success: boolean }>(`/api/warehouse/consumption/${id}`, { method: "DELETE" }); }
 
+// Инструменты
+export function getTools() { return fetchJson<any[]>("/api/tools"); }
+export function createTool(payload: any) { return fetchJson<any>("/api/tools", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); }
+export function updateTool(id: number, payload: any) { return fetchJson<any>(`/api/tools/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); }
+export function deleteTool(id: number) { return fetchJson<{ success: boolean }>(`/api/tools/${id}`, { method: "DELETE" }); }
+
+// Выдача инструментов
+export function getToolAssignments() { return fetchJson<any[]>("/api/tool-assignments"); }
+export function createToolAssignment(payload: any) { return fetchJson<any>("/api/tool-assignments", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); }
+export function updateToolAssignment(id: number, payload: any) { return fetchJson<any>(`/api/tool-assignments/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); }
+export function deleteToolAssignment(id: number) { return fetchJson<{ success: boolean }>(`/api/tool-assignments/${id}`, { method: "DELETE" }); }
+
 // Заявки на закупку
 export function getPurchaseRequests() { return fetchJson<any[]>("/api/purchase-requests"); }
 export function createPurchaseRequest(payload: any) { return fetchJson<any>("/api/purchase-requests", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); }
@@ -233,24 +270,174 @@ export function createDocument(payload: Partial<Document>) { return fetchJson<Do
 export function updateDocument(id: number, payload: Partial<Document>) { return fetchJson<Document>(`/api/documents/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); }
 export function deleteDocument(id: number) { return fetchJson<{ success: boolean }>(`/api/documents/${id}`, { method: "DELETE" }); }
 
+function fileUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  // Если уже абсолютный URL, возвращаем как есть
+  if (/^https?:\/\//i.test(path)) return path;
+  return apiUrl(path);
+}
+
+export function resolveFileUrl(path: string | null | undefined): string | null {
+  return fileUrl(path);
+}
+
 export function createUser(payload: Partial<User>) {
+  console.log('API: createUser вызвана с данными:', payload);
+  
+  // Очищаем данные от пустых строк и null значений
+  const cleanPayload = Object.fromEntries(
+    Object.entries(payload).filter(([_, value]) => 
+      value !== null && value !== undefined && value !== ''
+    )
+  );
+  
+  console.log('API: createUser очищенные данные:', cleanPayload);
+  
   return fetchJson<User>(`/api/users`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+    body: JSON.stringify(cleanPayload),
+  }).then(u => ({ ...u, photo_url: fileUrl(u.photo_url) || undefined } as User));
 }
 
 export function updateUser(id: number, payload: Partial<User>) {
+  console.log('API: updateUser вызвана с ID:', id, 'и данными:', payload);
+  
+  // Очищаем payload от null, undefined и пустых строк
+  const cleanPayload = Object.fromEntries(
+    Object.entries(payload).filter(([_, value]) => 
+      value !== null && value !== undefined && value !== ''
+    )
+  );
+  
+  console.log('API: updateUser очищенные данные:', cleanPayload);
+  
   return fetchJson<User>(`/api/users/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+    body: JSON.stringify(cleanPayload),
+  }).then(u => ({ ...u, photo_url: fileUrl(u.photo_url) || undefined } as User));
+}
+
+// Функция для загрузки фото пользователя
+export async function uploadUserPhoto(userId: number, photoFile: File): Promise<{ photoUrl: string }> {
+  try {
+    const formData = new FormData();
+    formData.append('photo', photoFile);
+    formData.append('userId', userId.toString());
+
+    const headers: HeadersInit = {};
+    if (AUTH_TOKEN) (headers as any)["Authorization"] = `Bearer ${AUTH_TOKEN}`;
+
+    const response = await fetch(apiUrl('/api/users/upload-photo'), {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Upload error' }));
+      throw new Error(errorData.error || `HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    const absolute = fileUrl(data.photoUrl);
+    return { photoUrl: absolute || data.photoUrl };
+  } catch (error) {
+    console.error('Ошибка загрузки фото:', error);
+    throw error;
+  }
 }
 
 export function deleteUser(id: number) {
-  return fetchJson<{ success: boolean }>(`/api/users/${id}`, {
+  return fetchJson<{ ok: boolean; archived?: boolean }>(`/api/users/${id}`, {
     method: "DELETE",
   });
+}
+
+export function getArchivedUsers() {
+  return fetchJson<User[]>(`/api/users/archived`).then(users => users.map(u => ({
+    ...u,
+    photo_url: fileUrl(u.photo_url) || undefined,
+  })));
+}
+
+export function restoreUser(id: number) {
+  return fetchJson<User>(`/api/users/${id}/restore`, { method: 'POST' }).then(u => ({
+    ...u,
+    photo_url: fileUrl(u.photo_url) || undefined,
+  }));
+}
+
+// API для прочитанных уведомлений (временная реализация с localStorage)
+export function getReadNotifications(): Promise<string[]> {
+  console.log('API: getReadNotifications вызвана');
+  try {
+    const stored = localStorage.getItem('readNotifications');
+    const data = stored ? JSON.parse(stored) : [];
+    console.log('API: getReadNotifications получила данные из localStorage:', data);
+    return Promise.resolve(data);
+  } catch (error) {
+    console.error('API: Ошибка в getReadNotifications:', error);
+    return Promise.resolve([]);
+  }
+}
+
+export function markNotificationAsRead(notificationId: string): Promise<void> {
+  console.log('API: markNotificationAsRead вызвана с:', notificationId);
+  try {
+    const stored = localStorage.getItem('readNotifications');
+    const readNotifications = stored ? JSON.parse(stored) : [];
+    
+    if (!readNotifications.includes(notificationId)) {
+      readNotifications.push(notificationId);
+      localStorage.setItem('readNotifications', JSON.stringify(readNotifications));
+      console.log('API: markNotificationAsRead успешно выполнена');
+    }
+    
+    return Promise.resolve();
+  } catch (error) {
+    console.error('API: Ошибка в markNotificationAsRead:', error);
+    return Promise.resolve();
+  }
+}
+
+export function markAllNotificationsAsRead(notificationIds: string[]): Promise<void> {
+  console.log('API: markAllNotificationsAsRead вызвана с:', notificationIds);
+  try {
+    const stored = localStorage.getItem('readNotifications');
+    const readNotifications = stored ? JSON.parse(stored) : [];
+    
+    // Добавляем новые ID, избегая дублирования
+    notificationIds.forEach(id => {
+      if (!readNotifications.includes(id)) {
+        readNotifications.push(id);
+      }
+    });
+    
+    localStorage.setItem('readNotifications', JSON.stringify(readNotifications));
+    console.log('API: markAllNotificationsAsRead успешно выполнена');
+    return Promise.resolve();
+  } catch (error) {
+    console.error('API: Ошибка в markAllNotificationsAsRead:', error);
+    return Promise.resolve();
+  }
+}
+
+export function clearReadNotifications(): Promise<void> {
+  console.log('API: clearReadNotifications вызвана');
+  try {
+    localStorage.removeItem('readNotifications');
+    console.log('API: clearReadNotifications успешно выполнена');
+    return Promise.resolve();
+  } catch (error) {
+    console.error('API: Ошибка в clearReadNotifications:', error);
+    return Promise.resolve();
+  }
+}
+
+// Дневная статистика пользователя
+export function getDailyStats(userId: number, date: string) {
+  console.log(`API: getDailyStats вызвана для пользователя ${userId} за ${date}`);
+  return fetchJson<any>(`/api/users/${userId}/daily/${date}`);
 }

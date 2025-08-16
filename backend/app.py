@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Header, Request, UploadFile
+from fastapi import FastAPI, HTTPException, Header, Request, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -51,6 +51,7 @@ app.add_middleware(
 # Статика для загруженных файлов счетов
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.mount("/files", StaticFiles(directory=UPLOAD_DIR), name="files")
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 
 def _connect() -> sqlite3.Connection:
@@ -166,6 +167,41 @@ def _init_schema() -> None:
             )
             """
         )
+        # Пользователи
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT,
+                full_name TEXT,
+                role TEXT DEFAULT 'employee',
+                phone TEXT,
+                email TEXT,
+                position TEXT,
+                department TEXT,
+                hire_date TEXT,
+                salary REAL,
+                photo_url TEXT,
+                gender TEXT,
+                status TEXT DEFAULT 'active',
+                clothing_size TEXT,
+                shoe_size TEXT,
+                age INTEGER,
+                bad_habits TEXT,
+                chat_id INTEGER,
+                is_admin INTEGER DEFAULT 0,
+                accommodation_type TEXT,
+                accommodation_address TEXT,
+                room_number TEXT,
+                meals_included BOOLEAN,
+                transport_provided BOOLEAN,
+                transport_type TEXT,
+                utilities_included BOOLEAN,
+                created_at TEXT,
+                updated_at TEXT
+            )
+            """
+        )
         # Унифицированные оплаты (деньги проведены по источнику)
         cur.execute(
             """
@@ -179,6 +215,30 @@ def _init_schema() -> None:
                 counterparty TEXT,
                 object_id INTEGER,
                 notes TEXT,
+                created_at TEXT
+            )
+            """
+        )
+        # Объекты
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS objects (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                description TEXT,
+                topic_id INTEGER,
+                address TEXT,
+                plan TEXT,
+                goal TEXT,
+                actions TEXT,
+                visibility_admin BOOLEAN,
+                visibility_foreman BOOLEAN,
+                visibility_worker BOOLEAN,
+                created_by INTEGER,
+                start_date TEXT,
+                end_date TEXT,
+                budget REAL,
+                status TEXT DEFAULT 'active',
                 created_at TEXT
             )
             """
@@ -202,6 +262,23 @@ def _init_schema() -> None:
             )
             """
         )
+        # Задачи
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                description TEXT,
+                status TEXT DEFAULT 'pending',
+                priority TEXT DEFAULT 'medium',
+                assigned_to INTEGER,
+                object_id INTEGER,
+                due_date TEXT,
+                created_at TEXT,
+                updated_at TEXT
+            )
+            """
+        )
         # Прочие расходы
         cur.execute(
             """
@@ -215,6 +292,22 @@ def _init_schema() -> None:
                 description TEXT,
                 payment_status TEXT,
                 due_date TEXT,
+                created_at TEXT
+            )
+            """
+        )
+        # Зарплаты
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS salaries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                amount REAL NOT NULL,
+                month TEXT NOT NULL,
+                year INTEGER NOT NULL,
+                status TEXT DEFAULT 'pending',
+                paid INTEGER DEFAULT 0,
+                paid_at TEXT,
                 created_at TEXT
             )
             """
@@ -241,6 +334,24 @@ def _init_schema() -> None:
                 purchase_id INTEGER,
                 created_at TEXT,
                 updated_at TEXT
+            )
+            """
+        )
+        # Закупки
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS purchases (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                item_name TEXT NOT NULL,
+                quantity REAL NOT NULL,
+                unit TEXT,
+                type TEXT,
+                supplier_id INTEGER,
+                url TEXT,
+                receipt_file TEXT,
+                created_at TEXT,
+                payment_status TEXT,
+                due_date TEXT
             )
             """
         )
@@ -309,6 +420,83 @@ def _init_schema() -> None:
             except Exception:
                 pass
         
+        # Отсутствия
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS absences (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                type TEXT NOT NULL,
+                start_date TEXT NOT NULL,
+                end_date TEXT NOT NULL,
+                reason TEXT,
+                status TEXT DEFAULT 'pending',
+                approved_by INTEGER,
+                approved_at TEXT,
+                created_at TEXT
+            )
+            """
+        )
+        
+        # Учет времени прихода/ухода
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS time_tracking (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                date TEXT NOT NULL,
+                check_in_time TEXT,
+                check_out_time TEXT,
+                break_start_time TEXT,
+                break_end_time TEXT,
+                total_hours REAL,
+                overtime_hours REAL,
+                status TEXT DEFAULT 'active',
+                notes TEXT,
+                created_at TEXT,
+                updated_at TEXT
+            )
+            """
+        )
+        
+        # Учет инструментов
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tools (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                serial_number TEXT,
+                type TEXT,
+                condition_status TEXT DEFAULT 'good',
+                location TEXT,
+                purchase_date TEXT,
+                price REAL,
+                notes TEXT,
+                created_at TEXT
+            )
+            """
+        )
+        
+        # Выдача/возврат инструментов
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tool_assignments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tool_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                assigned_date TEXT NOT NULL,
+                returned_date TEXT,
+                assigned_by INTEGER,
+                condition_out TEXT,
+                condition_in TEXT,
+                notes TEXT,
+                created_at TEXT,
+                FOREIGN KEY (tool_id) REFERENCES tools (id),
+                FOREIGN KEY (user_id) REFERENCES users (id)
+            )
+            """
+        )
+        
         # Доп. колонки для users
         cur.execute("PRAGMA table_info('users')")
         u_cols = {row[1] for row in cur.fetchall()}
@@ -339,6 +527,50 @@ def _init_schema() -> None:
             except Exception:
                 pass
         
+        # Добавляем колонки для users (photo_url и другие)
+        cur.execute("PRAGMA table_info('users')")
+        user_cols = {row[1] for row in cur.fetchall()}
+        user_add_cols: List[str] = []
+        if 'photo_url' not in user_cols:
+            user_add_cols.append("ALTER TABLE users ADD COLUMN photo_url TEXT")
+        if 'gender' not in user_cols:
+            user_add_cols.append("ALTER TABLE users ADD COLUMN gender TEXT")
+        if 'status' not in user_cols:
+            user_add_cols.append("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'")
+        if 'clothing_size' not in user_cols:
+            user_add_cols.append("ALTER TABLE users ADD COLUMN clothing_size TEXT")
+        if 'shoe_size' not in user_cols:
+            user_add_cols.append("ALTER TABLE users ADD COLUMN shoe_size TEXT")
+        if 'age' not in user_cols:
+            user_add_cols.append("ALTER TABLE users ADD COLUMN age INTEGER")
+        if 'bad_habits' not in user_cols:
+            user_add_cols.append("ALTER TABLE users ADD COLUMN bad_habits TEXT")
+        if 'updated_at' not in user_cols:
+            user_add_cols.append("ALTER TABLE users ADD COLUMN updated_at TEXT")
+        if 'accommodation_type' not in user_cols:
+            user_add_cols.append("ALTER TABLE users ADD COLUMN accommodation_type TEXT")
+        if 'accommodation_address' not in user_cols:
+            user_add_cols.append("ALTER TABLE users ADD COLUMN accommodation_address TEXT")
+        if 'room_number' not in user_cols:
+            user_add_cols.append("ALTER TABLE users ADD COLUMN room_number TEXT")
+        if 'meals_included' not in user_cols:
+            user_add_cols.append("ALTER TABLE users ADD COLUMN meals_included BOOLEAN")
+        if 'transport_provided' not in user_cols:
+            user_add_cols.append("ALTER TABLE users ADD COLUMN transport_provided BOOLEAN")
+        if 'transport_type' not in user_cols:
+            user_add_cols.append("ALTER TABLE users ADD COLUMN transport_type TEXT")
+        if 'utilities_included' not in user_cols:
+            user_add_cols.append("ALTER TABLE users ADD COLUMN utilities_included BOOLEAN")
+        if 'archived_at' not in user_cols:
+            user_add_cols.append("ALTER TABLE users ADD COLUMN archived_at TEXT")
+        for stmt in user_add_cols:
+            try:
+                cur.execute(stmt)
+                print(f"✅ Выполнено: {stmt}")
+            except Exception as e:
+                print(f"❌ Ошибка: {stmt} - {e}")
+                pass
+        
         # Таблица документов
         cur.execute(
             """
@@ -359,6 +591,20 @@ def _init_schema() -> None:
                 updated_at TEXT,
                 FOREIGN KEY (invoice_id) REFERENCES invoices (id),
                 FOREIGN KEY (object_id) REFERENCES objects (id)
+            )
+            """
+        )
+        
+        # Бригады
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS brigades (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                leader_id INTEGER,
+                object_id INTEGER,
+                status TEXT DEFAULT 'active',
+                created_at TEXT
             )
             """
         )
@@ -439,31 +685,32 @@ def auth_login(payload: Dict[str, Any]) -> JSONResponse:
     
     # Поддерживаем демо-режим для обратной совместимости
     if username == "admin" and password == "admin":
-        return JSONResponse({"token": DEMO_TOKEN, "user": DEMO_USER})
+        return JSONResponse({"token": DEMO_TOKEN, "user": DEMO_USER, "must_change_password": False})
     
     # Реальная аутентификация с хешированием пароля
     with _connect() as con:
         cur = con.cursor()
-        cur.execute("SELECT id, password_hash, full_name, role FROM auth_users WHERE username = ?", (username,))
+        cur.execute("SELECT id, password_hash, full_name, role, force_password_change FROM auth_users WHERE username = ?", (username,))
         user_record = cur.fetchone()
         
-        if user_record and verify_password(password, user_record["password_hash"]):
+        if user_record and verify_password(password, user_record[1]):
             # Генерируем токен
             import uuid
             token = f"token_{uuid.uuid4().hex}"
             
             # Сохраняем токен в памяти
             user_data = {
-                "id": user_record["id"],
+                "id": user_record[0],
                 "username": username,
-                "full_name": user_record["full_name"],
-                "role": user_record["role"]
+                "full_name": user_record[2],
+                "role": user_record[3]
             }
             REAL_TOKENS[token] = user_data
             
             return JSONResponse({
                 "token": token,
-                "user": user_data
+                "user": user_data,
+                "must_change_password": bool(user_record[4])
             })
     
     raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -492,6 +739,263 @@ def health() -> Dict[str, Any]:
     return {"status": "ok", "db_exists": os.path.exists(DB_PATH)}
 
 
+@app.get("/api/users/{user_id}/daily/{date}")
+def get_daily_stats(user_id: int, date: str) -> JSONResponse:
+    """Получить дневную статистику пользователя"""
+    with _connect() as con:
+        cur = con.cursor()
+        
+        print(f"📊 Получение дневной статистики для пользователя {user_id} за {date}")
+        
+        # Получаем данные пользователя
+        cur.execute("SELECT * FROM users WHERE id=?", (user_id,))
+        user_row = cur.fetchone()
+        if not user_row:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        user_data = dict(user_row)
+        
+        # Получаем задачи за день (по полю work_date, если есть)
+        cur.execute("""
+            SELECT id, title, description, status, assignee_id, object_id, deadline, created_at, completed_at,
+                   pay_amount, pay_type, pay_rate, actual_minutes
+            FROM tasks 
+            WHERE assignee_id = ? AND DATE(COALESCE(work_date, created_at)) = ?
+        """, (user_id, date))
+        tasks = _rows_to_dicts(cur.fetchall())
+        
+        # Получаем зарплату за период (ищем по дате)
+        month_start = date[:7] + '-01'  # YYYY-MM-01
+        month_end = date[:7] + '-31'    # YYYY-MM-31
+        cur.execute("""
+            SELECT * FROM salaries 
+            WHERE user_id = ? AND DATE(date) BETWEEN ? AND ?
+        """, (user_id, month_start, month_end))
+        salary_rows = cur.fetchall()
+        salary_data = _rows_to_dicts(salary_rows)
+        
+        # Получаем заявки на закупки за день
+        cur.execute("""
+            SELECT * FROM purchase_requests
+            WHERE requested_by = ? AND DATE(created_at) = ?
+        """, (user_id, date))
+        purchase_requests = _rows_to_dicts(cur.fetchall())
+        
+        # Получаем списания материалов за день (если пользователь работал на объектах)
+        cur.execute("""
+            SELECT wc.*, o.name as object_name
+            FROM warehouse_consumption wc
+            LEFT JOIN objects o ON wc.object_id = o.id
+            WHERE wc.user_id = ? AND DATE(wc.consumption_date) = ?
+        """, (user_id, date))
+        material_consumption = _rows_to_dicts(cur.fetchall())
+        
+        # Получаем прочие расходы за день
+        cur.execute("""
+            SELECT oe.*, o.name as object_name
+            FROM other_expenses oe
+            LEFT JOIN objects o ON oe.object_id = o.id
+            WHERE DATE(oe.date) = ? AND object_id IN (
+                SELECT DISTINCT object_id FROM tasks WHERE assignee_id = ? AND DATE(COALESCE(work_date, created_at)) = ?
+            )
+        """, (date, user_id, date))
+        other_expenses = _rows_to_dicts(cur.fetchall())
+        
+        # Получаем объекты, на которых пользователь работал именно в этот день
+        cur.execute("""
+            SELECT DISTINCT o.* FROM objects o
+            INNER JOIN tasks t ON o.id = t.object_id
+            WHERE t.assignee_id = ? AND DATE(COALESCE(t.work_date, t.created_at)) = ?
+        """, (user_id, date))
+        user_objects = _rows_to_dicts(cur.fetchall())
+        
+        # Получаем учет времени за день
+        cur.execute("""
+            SELECT * FROM time_tracking
+            WHERE user_id = ? AND date = ?
+        """, (user_id, date))
+        time_tracking_data = _rows_to_dicts(cur.fetchall())
+        
+        # Получаем инструменты, которые были у пользователя в этот день (кто выдал)
+        cur.execute("""
+            SELECT ta.*, t.name as tool_name, t.type as tool_type, t.serial_number,
+                   u.full_name as assigned_by_name, u.username as assigned_by_username
+            FROM tool_assignments ta
+            INNER JOIN tools t ON ta.tool_id = t.id
+            LEFT JOIN users u ON ta.assigned_by = u.id
+            WHERE ta.user_id = ? 
+              AND DATE(ta.assigned_date) <= ? 
+              AND (ta.returned_date IS NULL OR DATE(ta.returned_date) > ?)
+        """, (user_id, date, date))
+        active_tools = _rows_to_dicts(cur.fetchall())
+
+        # Касса за день для пользователя (авансы/удержания/бонусы и т.п.)
+        cur.execute("""
+            SELECT * FROM cash_transactions
+            WHERE user_id = ? AND DATE(COALESCE(date, created_at)) = ?
+        """, (user_id, date))
+        cash_rows = _rows_to_dicts(cur.fetchall())
+
+        def _sum_if(rows, pred):
+            total = 0.0
+            for r in rows:
+                try:
+                    if pred(r):
+                        total += float(r.get("amount") or 0)
+                except Exception:
+                    pass
+            return total
+
+        def _lower(val):
+            return str(val or "").lower()
+
+        advances_sum = _sum_if(
+            cash_rows,
+            lambda r: _lower(r.get("type")) in ("advance", "аванс")
+                     or "аванс" in _lower(r.get("category"))
+                     or "advance" in _lower(r.get("category")),
+        )
+        withholdings_sum = _sum_if(
+            cash_rows,
+            lambda r: _lower(r.get("type")) in ("withhold", "удержание", "penalty")
+                     or "удерж" in _lower(r.get("category"))
+                     or "штраф" in _lower(r.get("category")),
+        )
+        bonuses_sum = _sum_if(
+            cash_rows,
+            lambda r: _lower(r.get("type")) == "bonus" or "бонус" in _lower(r.get("category")),
+        )
+
+        # Себестоимость труда за день (сдельно/почасово/фикс)
+        labor_cost = 0.0
+        for t in tasks:
+            pa = t.get("pay_amount")
+            if pa is not None:
+                try:
+                    labor_cost += float(pa or 0)
+                    continue
+                except Exception:
+                    pass
+            pay_type = t.get("pay_type")
+            rate = t.get("pay_rate")
+            minutes = t.get("actual_minutes")
+            try:
+                if pay_type == "hourly" and rate is not None and minutes is not None:
+                    labor_cost += float(rate) * (float(minutes) / 60.0)
+            except Exception:
+                pass
+
+        # Себестоимость материалов (фактические списания)
+        materials_cost = 0.0
+        for m in material_consumption:
+            try:
+                materials_cost += float(m.get("total_amount") or 0)
+            except Exception:
+                pass
+
+        # Прочие расходы по объектам дня
+        other_cost = 0.0
+        for e in other_expenses:
+            try:
+                other_cost += float(e.get("amount") or 0)
+            except Exception:
+                pass
+
+        total_cost = labor_cost + advances_sum + withholdings_sum + materials_cost + other_cost
+        
+        # Вычисляем базовую статистику
+        completed_tasks = [t for t in tasks if t.get('status') == 'completed']
+        in_progress_tasks = [t for t in tasks if t.get('status') == 'in_progress']
+        
+        # Базовая дневная зарплата (если есть месячная зарплата)
+        daily_earnings = 0
+        if salary_data:
+            monthly_salary = salary_data[0].get('amount', 0)
+            daily_earnings = monthly_salary / 22  # Рабочие дни в месяце
+        
+        # Вычисляем примерное время работы
+        planned_hours = 8  # Стандартный рабочий день
+        worked_hours = len(completed_tasks) * 1.5 + len(in_progress_tasks) * 0.5  # Примерный расчет
+        
+        # Получаем время из time_tracking или вычисляем примерно
+        actual_hours = 0
+        check_in_time = None
+        check_out_time = None
+        
+        if time_tracking_data:
+            time_data = time_tracking_data[0]
+            actual_hours = time_data.get('total_hours', 0)
+            check_in_time = time_data.get('check_in_time')
+            check_out_time = time_data.get('check_out_time')
+        else:
+            # Примерно вычисляем время по задачам
+            actual_hours = len(completed_tasks) * 1.5 + len(in_progress_tasks) * 0.5
+
+        # Формируем ответ
+        stats = {
+            "user": user_data,
+            "date": date,
+            "work_stats": {
+                "planned_hours": planned_hours,
+                "worked_hours": actual_hours,
+                "check_in_time": check_in_time,
+                "check_out_time": check_out_time,
+                "tasks_total": len(tasks),
+                "tasks_completed": len(completed_tasks),
+                "tasks_in_progress": len(in_progress_tasks),
+                "efficiency": round((len(completed_tasks) / len(tasks) * 100), 1) if tasks else 0,
+                "daily_earnings": round(daily_earnings, 2),
+                "idle_time": max(0, planned_hours - actual_hours),
+                "smoke_breaks": 2,  # Мок данные, можно добавить таблицу для отслеживания
+                "overtime": max(0, actual_hours - planned_hours)
+            },
+            "tasks": tasks,
+            "materials": {
+                "requests": purchase_requests,
+                "consumption": material_consumption
+            },
+            "tools": active_tools,
+            "time_tracking": time_tracking_data,
+            "finances": {
+                "salary": salary_data,
+                "expenses": other_expenses,
+                "daily_earnings": round(daily_earnings, 2)
+            },
+            "costs": {
+                "labor": round(labor_cost, 2),
+                "advances": round(advances_sum, 2),
+                "withholdings": round(withholdings_sum, 2),
+                "bonuses": round(bonuses_sum, 2),
+                "materials": round(materials_cost, 2),
+                "other_expenses": round(other_cost, 2),
+                "total": round(total_cost, 2)
+            },
+            "household": {
+                "accommodation_type": user_data.get('accommodation_type'),
+                "accommodation_address": user_data.get('accommodation_address'),
+                "room_number": user_data.get('room_number'),
+                "meals_included": user_data.get('meals_included'),
+                "transport_provided": user_data.get('transport_provided'),
+                "transport_type": user_data.get('transport_type'),
+                "utilities_included": user_data.get('utilities_included')
+            },
+            "personal": {
+                "clothing_size": user_data.get('clothing_size'),
+                "shoe_size": user_data.get('shoe_size'),
+                "position": user_data.get('position'),
+                "department": user_data.get('department'),
+                "status": user_data.get('status'),
+                "age": user_data.get('age'),
+                "gender": user_data.get('gender'),
+                "bad_habits": user_data.get('bad_habits')
+            },
+            "objects": user_objects
+        }
+        
+        print(f"✅ Статистика получена: {len(tasks)} задач, {len(material_consumption)} материалов, {len(user_objects)} объектов")
+        return JSONResponse(stats)
+
+
 @app.get("/api/objects")
 def get_objects() -> JSONResponse:
     with _connect() as con:
@@ -501,11 +1005,32 @@ def get_objects() -> JSONResponse:
 
 
 @app.get("/api/users")
-def get_users() -> JSONResponse:
+def get_users(include_archived: bool = False) -> JSONResponse:
     with _connect() as con:
         cur = con.cursor()
-        cur.execute("SELECT * FROM users ORDER BY id DESC")
+        if include_archived:
+            cur.execute("SELECT * FROM users ORDER BY id DESC")
+        else:
+            cur.execute("SELECT * FROM users WHERE archived_at IS NULL ORDER BY id DESC")
         return JSONResponse(_rows_to_dicts(cur.fetchall()))
+
+@app.get("/api/users/archived")
+def get_archived_users() -> JSONResponse:
+    with _connect() as con:
+        cur = con.cursor()
+        cur.execute("SELECT * FROM users WHERE archived_at IS NOT NULL ORDER BY archived_at DESC, id DESC")
+        return JSONResponse(_rows_to_dicts(cur.fetchall()))
+
+@app.post("/api/users/{user_id}/restore")
+def restore_user(user_id: int) -> JSONResponse:
+    with _connect() as con:
+        cur = con.cursor()
+        cur.execute("UPDATE users SET archived_at = NULL, status = 'active' WHERE id = ?", (user_id,))
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="User not found")
+        con.commit()
+        cur.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+        return JSONResponse(dict(cur.fetchone()))
 
 
 @app.get("/api/tasks")
@@ -2124,7 +2649,15 @@ def api_delete_warehouse_consumption(consumption_id: int) -> JSONResponse:
 class ObjectCreate(BaseModel):
     name: str
     description: Optional[str] = None
+    topic_id: Optional[int] = None
     address: Optional[str] = None
+    plan: Optional[str] = None
+    goal: Optional[str] = None
+    actions: Optional[str] = None
+    visibility_admin: Optional[bool] = True
+    visibility_foreman: Optional[bool] = True
+    visibility_worker: Optional[bool] = True
+    created_by: Optional[int] = None
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     budget: Optional[float] = None
@@ -2133,7 +2666,15 @@ class ObjectCreate(BaseModel):
 class ObjectUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    topic_id: Optional[int] = None
     address: Optional[str] = None
+    plan: Optional[str] = None
+    goal: Optional[str] = None
+    actions: Optional[str] = None
+    visibility_admin: Optional[bool] = None
+    visibility_foreman: Optional[bool] = None
+    visibility_worker: Optional[bool] = None
+    created_by: Optional[int] = None
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     budget: Optional[float] = None
@@ -2144,9 +2685,9 @@ def create_object(payload: ObjectCreate) -> JSONResponse:
     with _connect() as con:
         cur = con.cursor()
         cur.execute(
-            """INSERT INTO objects(name, description, address, start_date, end_date, budget, status, created_at)
-               VALUES(?, ?, ?, ?, ?, ?, ?, datetime('now'))""",
-            (payload.name, payload.description, payload.address, payload.start_date, payload.end_date, payload.budget, payload.status),
+            """INSERT INTO objects(name, description, topic_id, address, plan, goal, actions, visibility_admin, visibility_foreman, visibility_worker, created_by, start_date, end_date, budget, status, created_at)
+               VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))""",
+            (payload.name, payload.description, payload.topic_id, payload.address, payload.plan, payload.goal, payload.actions, payload.visibility_admin, payload.visibility_foreman, payload.visibility_worker, payload.created_by, payload.start_date, payload.end_date, payload.budget, payload.status),
         )
         rid = cur.lastrowid
         con.commit()
@@ -2190,6 +2731,23 @@ class UserCreate(BaseModel):
     department: Optional[str] = None
     hire_date: Optional[str] = None
     salary: Optional[float] = None
+    photo_url: Optional[str] = None
+    gender: Optional[str] = None
+    status: Optional[str] = "active"
+    clothing_size: Optional[str] = None
+    shoe_size: Optional[str] = None
+    age: Optional[int] = None
+    bad_habits: Optional[str] = None
+    chat_id: Optional[int] = None
+    is_admin: Optional[int] = 0
+    # Бытовые поля
+    accommodation_type: Optional[str] = None
+    accommodation_address: Optional[str] = None
+    room_number: Optional[str] = None
+    meals_included: Optional[bool] = None
+    transport_provided: Optional[bool] = None
+    transport_type: Optional[str] = None
+    utilities_included: Optional[bool] = None
 
 class UserUpdate(BaseModel):
     username: Optional[str] = None
@@ -2201,15 +2759,39 @@ class UserUpdate(BaseModel):
     department: Optional[str] = None
     hire_date: Optional[str] = None
     salary: Optional[float] = None
+    photo_url: Optional[str] = None
+    gender: Optional[str] = None
+    status: Optional[str] = None
+    clothing_size: Optional[str] = None
+    shoe_size: Optional[str] = None
+    age: Optional[int] = None
+    bad_habits: Optional[str] = None
+    chat_id: Optional[int] = None
+    is_admin: Optional[int] = None
+    # Бытовые поля
+    accommodation_type: Optional[str] = None
+    accommodation_address: Optional[str] = None
+    room_number: Optional[str] = None
+    meals_included: Optional[bool] = None
+    transport_provided: Optional[bool] = None
+    transport_type: Optional[str] = None
+    utilities_included: Optional[bool] = None
 
 @app.post("/api/users")
 def create_user(payload: UserCreate) -> JSONResponse:
     with _connect() as con:
         cur = con.cursor()
         cur.execute(
-            """INSERT INTO users(username, full_name, role, phone, email, position, department, hire_date, salary, created_at)
-               VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))""",
-            (payload.username, payload.full_name, payload.role, payload.phone, payload.email, payload.position, payload.department, payload.hire_date, payload.salary),
+            """INSERT INTO users(username, full_name, role, phone, email, position, department, hire_date, salary, 
+               photo_url, gender, status, clothing_size, shoe_size, age, bad_habits, chat_id, is_admin, 
+               accommodation_type, accommodation_address, room_number, meals_included, transport_provided, 
+               transport_type, utilities_included, created_at, updated_at)
+               VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))""",
+            (payload.username, payload.full_name, payload.role, payload.phone, payload.email, payload.position, 
+             payload.department, payload.hire_date, payload.salary, payload.photo_url, payload.gender, 
+             payload.status, payload.clothing_size, payload.shoe_size, payload.age, payload.bad_habits,
+             payload.chat_id, payload.is_admin, payload.accommodation_type, payload.accommodation_address, payload.room_number,
+             payload.meals_included, payload.transport_provided, payload.transport_type, payload.utilities_included),
         )
         rid = cur.lastrowid
         con.commit()
@@ -2217,21 +2799,142 @@ def create_user(payload: UserCreate) -> JSONResponse:
         return JSONResponse(dict(cur.fetchone()))
 
 @app.patch("/api/users/{user_id}")
-def update_user(user_id: int, payload: UserUpdate) -> JSONResponse:
-    updates = payload.model_dump(exclude_none=True)
-    if not updates:
-        raise HTTPException(status_code=400, detail="No fields to update")
-    fields = [f"{k} = ?" for k in updates.keys()]
-    values = list(updates.values()) + [user_id]
+async def update_user(user_id: int, request: Request) -> JSONResponse:
+    try:
+        print(f"🔍 Обновление пользователя {user_id}")
+        
+        # Получаем сырой JSON для обработки пустых строк
+        try:
+            raw_data = await request.json()
+            print(f"📝 Сырые данные: {raw_data}")
+        except Exception as e:
+            print(f"❌ Ошибка парсинга JSON: {e}")
+            raise HTTPException(status_code=400, detail="Invalid JSON")
+        
+        # Валидируем данные через модель, но используем exclude_unset вместо exclude_none
+        try:
+            payload = UserUpdate(**raw_data)
+            updates = payload.model_dump(exclude_unset=True)
+            print(f"📝 Валидированные данные: {payload}")
+        except Exception as e:
+            print(f"❌ Ошибка валидации: {e}")
+            raise HTTPException(status_code=400, detail=f"Validation error: {e}")
+        
+        print(f"🔄 Поля для обновления: {updates}")
+        
+        if not updates:
+            raise HTTPException(status_code=400, detail="No fields to update")
+        
+        # Добавляем updated_at
+        updates['updated_at'] = datetime.now().isoformat()
+        
+        fields = [f"{k} = ?" for k in updates.keys()]
+        values = list(updates.values()) + [user_id]
+        
+        print(f"📊 SQL поля: {fields}")
+        print(f"📊 SQL значения: {values}")
+        
+        with _connect() as con:
+            cur = con.cursor()
+            sql_query = f"UPDATE users SET {', '.join(fields)} WHERE id = ?"
+            print(f"🔍 SQL запрос: {sql_query}")
+            
+            cur.execute(sql_query, values)
+            con.commit()
+            
+            print(f"✅ Обновление выполнено, затронуто строк: {cur.rowcount}")
+            
+            cur.execute("SELECT * FROM users WHERE id=?", (user_id,))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="User not found")
+            
+            print(f"✅ Пользователь найден: {dict(row)}")
+            return JSONResponse(dict(row))
+            
+    except Exception as e:
+        print(f"❌ Ошибка при обновлении пользователя: {e}")
+        print(f"❌ Тип ошибки: {type(e)}")
+        import traceback
+        traceback.print_exc()
+        raise
+
+@app.delete("/api/users/{user_id}")
+def delete_user(user_id: int) -> JSONResponse:
+    """Мягкое удаление (архивирование) пользователя"""
     with _connect() as con:
         cur = con.cursor()
-        cur.execute(f"UPDATE users SET {', '.join(fields)} WHERE id = ?", values)
-        con.commit()
-        cur.execute("SELECT * FROM users WHERE id=?", (user_id,))
-        row = cur.fetchone()
-        if not row:
+        cur.execute("UPDATE users SET status = COALESCE(status, 'active'), archived_at = datetime('now') WHERE id = ?", (user_id,))
+        if cur.rowcount == 0:
             raise HTTPException(status_code=404, detail="User not found")
-        return JSONResponse(dict(row))
+        con.commit()
+        return JSONResponse({"ok": True, "archived": True})
+
+@app.post("/api/users/upload-photo")
+async def upload_user_photo(
+    photo: UploadFile,
+    userId: int = Form(...)
+) -> JSONResponse:
+    """Загрузка фото пользователя"""
+    try:
+        # Проверяем тип файла
+        allowed_types = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
+        if photo.content_type not in allowed_types:
+            raise HTTPException(
+                status_code=400,
+                detail="Неподдерживаемый тип файла. Разрешены только JPEG, PNG, WebP"
+            )
+        
+        # Проверяем размер файла (5MB максимум)
+        contents = await photo.read()
+        if len(contents) > 5 * 1024 * 1024:
+            raise HTTPException(
+                status_code=400,
+                detail="Файл слишком большой. Максимальный размер: 5MB"
+            )
+        
+        # Создаем директорию для фото если её нет
+        photo_dir = os.path.join(UPLOAD_DIR, "photos")
+        os.makedirs(photo_dir, exist_ok=True)
+        
+        # Генерируем уникальное имя файла
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        file_ext = os.path.splitext(photo.filename)[1]
+        filename = f"user_{userId}_{timestamp}{file_ext}"
+        file_path = os.path.join(photo_dir, filename)
+        
+        # Сохраняем файл
+        with open(file_path, "wb") as f:
+            f.write(contents)
+        
+        # Обновляем URL фото в базе данных
+        photo_url = f"/files/photos/{filename}"
+        
+        with _connect() as con:
+            cur = con.cursor()
+            cur.execute(
+                "UPDATE users SET photo_url = ?, updated_at = datetime('now') WHERE id = ?",
+                (photo_url, userId)
+            )
+            con.commit()
+            
+            # Проверяем что пользователь существует
+            if cur.rowcount == 0:
+                # Удаляем загруженный файл
+                os.remove(file_path)
+                raise HTTPException(status_code=404, detail="Пользователь не найден")
+        
+        return JSONResponse({
+            "success": True,
+            "photoUrl": photo_url,
+            "message": "Фото успешно загружено"
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Ошибка загрузки фото: {e}")
+        raise HTTPException(status_code=500, detail="Внутренняя ошибка сервера")
 
 @app.delete("/api/users/{user_id}")
 def delete_user(user_id: int) -> JSONResponse:
@@ -2603,6 +3306,257 @@ def generate_invoice_pdf(invoice_id: int) -> JSONResponse:
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error generating PDF: {str(e)}")
+
+# Обновляем схему auth_users: добавляем недостающие поля
+with _connect() as con:
+    cur = con.cursor()
+    cur.execute("PRAGMA table_info('auth_users')")
+    a_cols = {row[1] for row in cur.fetchall()}
+    add_auth_cols: List[str] = []
+    if 'user_id' not in a_cols:
+        add_auth_cols.append("ALTER TABLE auth_users ADD COLUMN user_id INTEGER")
+    if 'force_password_change' not in a_cols:
+        add_auth_cols.append("ALTER TABLE auth_users ADD COLUMN force_password_change INTEGER DEFAULT 0")
+    if 'initial_password' not in a_cols:
+        add_auth_cols.append("ALTER TABLE auth_users ADD COLUMN initial_password TEXT")
+    if 'created_at' not in a_cols:
+        add_auth_cols.append("ALTER TABLE auth_users ADD COLUMN created_at TEXT")
+    if 'updated_at' not in a_cols:
+        add_auth_cols.append("ALTER TABLE auth_users ADD COLUMN updated_at TEXT")
+    for stmt in add_auth_cols:
+        try:
+            cur.execute(stmt)
+        except Exception:
+            pass
+    con.commit()
+
+# Создание учётной записи для сотрудника администратором
+class AuthUserCreate(BaseModel):
+    user_id: int
+    username: str
+    password: str
+    role: Optional[str] = 'employee'
+
+@app.post("/api/auth/create-user")
+def auth_create_user(payload: AuthUserCreate) -> JSONResponse:
+    # Хеш пароля + сохранение исходного пароля для администратора до первой смены
+    pwd_hash = hash_password(payload.password)
+    with _connect() as con:
+        cur = con.cursor()
+        # Проверяем уникальность username
+        cur.execute("SELECT id FROM auth_users WHERE username = ?", (payload.username,))
+        if cur.fetchone():
+            raise HTTPException(status_code=400, detail="Username already exists")
+        # Создаём запись
+        cur.execute(
+            """
+            INSERT INTO auth_users(user_id, username, password_hash, full_name, role, force_password_change, initial_password, created_at, updated_at)
+            SELECT u.id, ?, ?, u.full_name, ?, 1, ?, datetime('now'), datetime('now')
+            FROM users u WHERE u.id = ?
+            """,
+            (payload.username, pwd_hash, payload.role or 'employee', payload.password, payload.user_id)
+        )
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="User not found")
+        con.commit()
+        cur.execute("SELECT id, user_id, username, full_name, role, force_password_change FROM auth_users WHERE username=?", (payload.username,))
+        row = cur.fetchone()
+        return JSONResponse(dict(row))
+
+class AuthChangePassword(BaseModel):
+    username: str
+    old_password: str
+    new_password: str
+
+@app.post("/api/auth/change-password")
+def auth_change_password(payload: AuthChangePassword) -> JSONResponse:
+    with _connect() as con:
+        cur = con.cursor()
+        cur.execute("SELECT id, password_hash FROM auth_users WHERE username = ?", (payload.username,))
+        rec = cur.fetchone()
+        if not rec:
+            raise HTTPException(status_code=404, detail="User not found")
+        if not verify_password(payload.old_password, rec[1]):
+            raise HTTPException(status_code=401, detail="Old password invalid")
+        new_hash = hash_password(payload.new_password)
+        cur.execute(
+            "UPDATE auth_users SET password_hash = ?, force_password_change = 0, initial_password = NULL, updated_at = datetime('now') WHERE id = ?",
+            (new_hash, rec[0])
+        )
+        con.commit()
+        return JSONResponse({"ok": True})
+
+@app.delete("/api/warehouse/consumption/{consumption_id}")
+def api_delete_warehouse_consumption(consumption_id: int) -> JSONResponse:
+    with _connect() as con:
+        cur = con.cursor()
+        cur.execute("DELETE FROM warehouse_consumption WHERE id=?", (consumption_id,))
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Warehouse consumption not found")
+        con.commit()
+        return JSONResponse({"ok": True})
+
+# API для инструментов
+@app.get("/api/tools")
+def get_tools() -> JSONResponse:
+    with _connect() as con:
+        cur = con.cursor()
+        cur.execute("SELECT * FROM tools ORDER BY id DESC")
+        return JSONResponse(_rows_to_dicts(cur.fetchall()))
+
+@app.post("/api/tools")
+async def create_tool(request: Request) -> JSONResponse:
+    try:
+        data = await request.json()
+    except:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    
+    with _connect() as con:
+        cur = con.cursor()
+        cur.execute(
+            """INSERT INTO tools(
+                name, serial_number, type, condition_status, location, 
+                purchase_date, price, notes, created_at
+            ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))""",
+            (
+                data.get("name"),
+                data.get("serial_number"),
+                data.get("type"),
+                data.get("condition_status"),
+                data.get("location"),
+                data.get("purchase_date"),
+                data.get("price"),
+                data.get("notes"),
+            ),
+        )
+        tool_id = cur.lastrowid
+        con.commit()
+        cur.execute("SELECT * FROM tools WHERE id=?", (tool_id,))
+        return JSONResponse(dict(cur.fetchone()))
+
+@app.patch("/api/tools/{tool_id}")
+async def update_tool(tool_id: int, request: Request) -> JSONResponse:
+    try:
+        data = await request.json()
+    except:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    
+    with _connect() as con:
+        cur = con.cursor()
+        updates = []
+        params = []
+        for key, value in data.items():
+            if key in ["name", "serial_number", "type", "condition_status", "location", 
+                      "purchase_date", "price", "notes"]:
+                updates.append(f"{key} = ?")
+                params.append(value)
+        
+        if not updates:
+            raise HTTPException(status_code=400, detail="No valid fields to update")
+        
+        params.append(tool_id)
+        cur.execute(f"UPDATE tools SET {', '.join(updates)} WHERE id = ?", params)
+        
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Tool not found")
+        
+        con.commit()
+        cur.execute("SELECT * FROM tools WHERE id=?", (tool_id,))
+        return JSONResponse(dict(cur.fetchone()))
+
+@app.delete("/api/tools/{tool_id}")
+def delete_tool(tool_id: int) -> JSONResponse:
+    with _connect() as con:
+        cur = con.cursor()
+        cur.execute("DELETE FROM tools WHERE id=?", (tool_id,))
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Tool not found")
+        con.commit()
+        return JSONResponse({"ok": True})
+
+# API для выдачи инструментов
+@app.get("/api/tool-assignments")
+def get_tool_assignments() -> JSONResponse:
+    with _connect() as con:
+        cur = con.cursor()
+        cur.execute("""
+            SELECT ta.*, t.name as tool_name, t.type as tool_type, t.serial_number,
+                   u.full_name as user_name, u.username as user_username,
+                   assigned.full_name as assigned_by_name, assigned.username as assigned_by_username
+            FROM tool_assignments ta
+            INNER JOIN tools t ON ta.tool_id = t.id
+            INNER JOIN users u ON ta.user_id = u.id
+            LEFT JOIN users assigned ON ta.assigned_by = assigned.id
+            ORDER BY ta.assigned_date DESC
+        """)
+        return JSONResponse(_rows_to_dicts(cur.fetchall()))
+
+@app.post("/api/tool-assignments")
+async def create_tool_assignment(request: Request) -> JSONResponse:
+    try:
+        data = await request.json()
+    except:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    
+    with _connect() as con:
+        cur = con.cursor()
+        cur.execute(
+            """INSERT INTO tool_assignments(
+                tool_id, user_id, assigned_date, assigned_by, 
+                condition_out, notes, created_at
+            ) VALUES(?, ?, ?, ?, ?, ?, datetime('now'))""",
+            (
+                data.get("tool_id"),
+                data.get("user_id"),
+                data.get("assigned_date"),
+                data.get("assigned_by"),
+                data.get("condition_out"),
+                data.get("notes"),
+            ),
+        )
+        assignment_id = cur.lastrowid
+        con.commit()
+        cur.execute("SELECT * FROM tool_assignments WHERE id=?", (assignment_id,))
+        return JSONResponse(dict(cur.fetchone()))
+
+@app.patch("/api/tool-assignments/{assignment_id}")
+async def update_tool_assignment(assignment_id: int, request: Request) -> JSONResponse:
+    try:
+        data = await request.json()
+    except:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    
+    with _connect() as con:
+        cur = con.cursor()
+        updates = []
+        params = []
+        for key, value in data.items():
+            if key in ["returned_date", "condition_in", "notes"]:
+                updates.append(f"{key} = ?")
+                params.append(value)
+        
+        if not updates:
+            raise HTTPException(status_code=400, detail="No valid fields to update")
+        
+        params.append(assignment_id)
+        cur.execute(f"UPDATE tool_assignments SET {', '.join(updates)} WHERE id = ?", params)
+        
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Tool assignment not found")
+        
+        con.commit()
+        cur.execute("SELECT * FROM tool_assignments WHERE id=?", (assignment_id,))
+        return JSONResponse(dict(cur.fetchone()))
+
+@app.delete("/api/tool-assignments/{assignment_id}")
+def delete_tool_assignment(assignment_id: int) -> JSONResponse:
+    with _connect() as con:
+        cur = con.cursor()
+        cur.execute("DELETE FROM tool_assignments WHERE id=?", (assignment_id,))
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Tool assignment not found")
+        con.commit()
+        return JSONResponse({"ok": True})
 
 if __name__ == "__main__":
     import uvicorn

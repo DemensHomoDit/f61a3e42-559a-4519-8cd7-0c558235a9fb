@@ -6,7 +6,7 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (username: string, password: string) => Promise<boolean>;
+  login: (username: string, password: string) => Promise<{ token: string; user: User; must_change_password?: boolean } | null>;
   logout: () => void;
   updateUser: (userData: Partial<User>) => void;
 }
@@ -59,7 +59,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const login = async (username: string, password: string): Promise<boolean> => {
+  const login = async (username: string, password: string): Promise<{ token: string; user: User; must_change_password?: boolean } | null> => {
     try {
       console.log(`AuthProvider: Attempting login for user: ${username}`);
       setIsLoading(true);
@@ -71,13 +71,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         localStorage.setItem('auth_token', response.token);
         setAuthToken(response.token);
         setUser(response.user);
-        return true;
+        return response;
       }
       console.log('AuthProvider: Login failed, no token in response');
-      return false;
+      return null;
     } catch (error) {
       console.error('Login failed:', error);
-      return false;
+      return null;
     } finally {
       setIsLoading(false);
     }

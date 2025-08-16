@@ -16,10 +16,20 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
+  const [showTransition, setShowTransition] = useState(false);
   
   const { login, isAuthenticated, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Отладочная информация
+  console.log('Login states:', { 
+    authLoading, 
+    isAuthenticated, 
+    showSplash, 
+    showTransition, 
+    isLoading 
+  });
 
   // Анимация логотипа при первой загрузке
   useEffect(() => {
@@ -40,6 +50,31 @@ const Login = () => {
     );
   }
 
+  // Анимация перехода при входе (проверяем до isAuthenticated)
+  if (showTransition) {
+    return (
+      <>
+        <Helmet>
+          <title>Вход в систему | UgraBuilders</title>
+        </Helmet>
+        <div className="fixed inset-0 bg-gradient-forest flex items-center justify-center z-50">
+          <div className="text-center animate-fade-in">
+            <div className="animate-scale-bounce">
+              <img 
+                src="/logo.svg" 
+                alt="UgraBuilders"
+                className="w-80 h-auto mx-auto animate-pulse"
+              />
+            </div>
+            <div className="text-white text-xl font-medium animate-fade-in opacity-80 mt-4">
+              Вход в систему...
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   if (isAuthenticated) {
     return <Navigate to="/" replace />;
   }
@@ -55,9 +90,9 @@ const Login = () => {
           <div className="text-center animate-fade-in">
             <div className="mb-8 animate-scale-bounce">
               <img 
-                src="/lovable-uploads/2bb979f2-5d6d-4de0-91d5-7eb13528c6be.png" 
+                src="/logo.svg" 
                 alt="UgraBuilders"
-                className="w-80 h-auto mx-auto animate-leaf-float"
+                className="w-80 h-auto mx-auto"
               />
             </div>
             <div className="text-white text-xl font-medium animate-fade-in opacity-80">
@@ -82,31 +117,22 @@ const Login = () => {
     }
 
     setIsLoading(true);
+    console.log('Начинаем вход в систему...');
     
     try {
-      const success = await login(username, password);
-      
-      if (success) {
-        toast({
-          title: 'Успешный вход',
-          description: 'Добро пожаловать в систему!',
-        });
-        navigate('/');
-      } else {
-        toast({
-          title: 'Ошибка входа',
-          description: 'Неверное имя пользователя или пароль',
-          variant: 'destructive',
-        });
+      const res = await login(username, password);
+      if (!res) {
+        throw new Error('Auth failed');
       }
-    } catch (error) {
-      toast({
-        title: 'Ошибка',
-        description: 'Произошла ошибка при входе. Попробуйте еще раз.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsLoading(false);
+      // Если требуется смена пароля — перенаправляем на страницу смены
+      if (res.must_change_password) {
+        navigate('/change-password', { state: { username } });
+        return;
+      }
+      setShowTransition(true);
+      setTimeout(() => navigate('/'), 600);
+    } catch (err) {
+      toast({ title: 'Неверный логин или пароль', status: 'error' });
     }
   };
 
@@ -123,9 +149,9 @@ const Login = () => {
           <div className="text-center space-y-6">
             <div className="hover-lift">
               <img 
-                src="/lovable-uploads/2bb979f2-5d6d-4de0-91d5-7eb13528c6be.png" 
+                src="/logo.svg" 
                 alt="UgraBuilders"
-                className="w-64 h-auto mx-auto animate-leaf-float"
+                className="w-64 h-auto mx-auto"
               />
             </div>
             <div className="space-y-2">
@@ -188,12 +214,12 @@ const Login = () => {
                 <Button
                   type="submit"
                   className="w-full btn-nature"
-                  disabled={isLoading}
+                  disabled={isLoading || showTransition}
                 >
-                  {isLoading ? (
+                  {isLoading || showTransition ? (
                     <div className="flex items-center gap-2">
                       <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      Вход...
+                      {showTransition ? 'Вход в систему...' : 'Вход...'}
                     </div>
                   ) : (
                     'Войти в систему'

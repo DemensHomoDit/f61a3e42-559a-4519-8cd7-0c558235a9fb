@@ -2,13 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
+/* 
+🌲 СОВРЕМЕННЫЙ СВЕТЛЫЙ ДИЗАЙН С ПРИРОДНОЙ ПАЛИТРОЙ
+================================================================
+
+Основные цвета:
+- Глубокая хвоя (#2E4D38) - тёмно-зелёный, еловые лапы в тени
+- Молодая ель (#3F6B4E) - средний зелёный, свежие весенние побеги
+- Холодный мох (#7B8E78) - приглушённый серо-зелёный
+- Лесная трава (#9BBF87) - светлый травянисто-зелёный
+- Хвойная шишка (#6B4F3F) - тёплый коричнево-ореховый
+- Утренний туман (#DCE1DF) - светло-серый с зелёным подтоном
+
+Дополнительные цвета:
+- Тёмная кора (#4A3B2A) - глубокий коричневый
+- Молодая кора (#7B5E3B) - светло-коричневый с золотистым
+- Лист летний (#4F6F3E) - насыщенный тёмно-зелёный
+- Лист весенний (#8FBF72) - яркий салатовый
+- Сухой лист (#B97B4E) - тёплый терракотовый
+- Серебристая берёза (#D9D6CF) - светло-серый с бежевым
 */
 
 @layer base {
   :root {
-    /* Природная палитра - основа */
+    /* 🌲 ОСНОВНАЯ ПАЛИТРА - ХВОЙНЫЙ ЛЕС */
     --deep-pine: 140 36% 22%; /* #2E4D38 - Глубокая хвоя */
     --young-spruce: 140 28% 34%; /* #3F6B4E - Молодая ель */
     --cold-moss: 115 7% 52%; /* #7B8E78 - Холодный мох */
@@ -16,7 +33,7 @@ All colors MUST be HSL.
     --pine-cone: 25 25% 34%; /* #6B4F3F - Хвойная шишка */
     --morning-mist: 120 10% 87%; /* #DCE1DF - Утренний туман */
     
-    /* Дополнительные древесные оттенки */
+    /* 🌳 ДОПОЛНИТЕЛЬНЫЕ ДЕРЕВЬЯ - ЛИСТВЕННЫЕ И ХВОЙНЫЕ */
     --dark-bark: 30 25% 22%; /* #4A3B2A - Тёмная кора */
     --young-bark: 30 30% 36%; /* #7B5E3B - Молодая кора */
     --summer-leaf: 90 28% 34%; /* #4F6F3E - Лист летний */
@@ -24,7 +41,7 @@ All colors MUST be HSL.
     --dry-leaf: 32 41% 51%; /* #B97B4E - Сухой лист */
     --silver-birch: 45 11% 82%; /* #D9D6CF - Серебристая берёза */
 
-    /* Основные цвета системы */
+    /* 🎨 СОВРЕМЕННЫЕ СИСТЕМНЫЕ ЦВЕТА */
     --background: 0 0% 100%; /* Белый фон */
     --foreground: var(--deep-pine);
 
@@ -59,25 +76,32 @@ All colors MUST be HSL.
     --input: var(--morning-mist);
     --ring: var(--young-spruce);
 
-    /* Градиенты */
+    /* 🌈 СОВРЕМЕННЫЕ ГРАДИЕНТЫ */
     --gradient-forest: linear-gradient(135deg, hsl(var(--young-spruce)), hsl(var(--deep-pine)));
     --gradient-nature: linear-gradient(135deg, hsl(var(--spring-leaf)), hsl(var(--forest-grass)));
     --gradient-earth: linear-gradient(135deg, hsl(var(--pine-cone)), hsl(var(--dark-bark)));
     --gradient-subtle: linear-gradient(180deg, hsl(var(--background)), hsl(var(--morning-mist)));
     --gradient-card: linear-gradient(135deg, hsl(0 0% 100%), hsl(var(--silver-birch)));
+    --gradient-bark: linear-gradient(135deg, hsl(var(--young-bark)), hsl(var(--dark-bark)));
+    --gradient-leaves: linear-gradient(135deg, hsl(var(--spring-leaf)), hsl(var(--summer-leaf)));
     
-    /* Тени с природными оттенками */
+    /* 🌫️ СОВРЕМЕННЫЕ ТЕНИ */
     --shadow-nature: 0 4px 20px -2px hsl(var(--young-spruce) / 0.12);
     --shadow-elevated: 0 8px 30px -4px hsl(var(--deep-pine) / 0.15);
     --shadow-glow: 0 0 40px hsl(var(--spring-leaf) / 0.2);
+    --shadow-bark: 0 4px 16px -2px hsl(var(--dark-bark) / 0.1);
+    --shadow-moss: 0 2px 12px -1px hsl(var(--cold-moss) / 0.08);
+    --shadow-modern: 0 2px 8px rgba(0, 0, 0, 0.08);
+    --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.1);
     
-    /* Анимации */
+    /* ⚡ СОВРЕМЕННЫЕ АНИМАЦИИ */
     --transition-smooth: all 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
     --transition-bounce: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    --transition-nature: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 
     --radius: 12px;
 
-    /* Сайдбар */
+    /* 🌲 СОВРЕМЕННЫЙ САЙДБАР */
     --sidebar-background: hsl(var(--morning-mist));
     --sidebar-foreground: hsl(var(--deep-pine));
     --sidebar-primary: hsl(var(--young-spruce));
@@ -89,7 +113,7 @@ All colors MUST be HSL.
   }
 
   .dark {
-    /* Тёмная тема с природными оттенками */
+    /* 🌙 ТЁМНАЯ ТЕМА - НОЧНОЙ ЛЕС */
     --background: var(--dark-bark);
     --foreground: var(--morning-mist);
 
@@ -136,7 +160,7 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    background-image: var(--gradient-subtle);
+    background-color: #f8fafc;
     min-height: 100vh;
   }
 
@@ -146,7 +170,7 @@ All colors MUST be HSL.
 }
 
 @layer components {
-  /* Природные градиенты */
+  /* 🌲 СОВРЕМЕННЫЕ ГРАДИЕНТЫ */
   .bg-gradient-forest {
     background: var(--gradient-forest);
   }
@@ -163,7 +187,15 @@ All colors MUST be HSL.
     background: var(--gradient-card);
   }
 
-  /* Современные тени */
+  .bg-gradient-bark {
+    background: var(--gradient-bark);
+  }
+
+  .bg-gradient-leaves {
+    background: var(--gradient-leaves);
+  }
+
+  /* 🌫️ СОВРЕМЕННЫЕ ТЕНИ */
   .shadow-nature {
     box-shadow: var(--shadow-nature);
   }
@@ -176,16 +208,54 @@ All colors MUST be HSL.
     box-shadow: var(--shadow-glow);
   }
 
-  /* Природные интерактивные эффекты */
-  .hover-lift {
-    @apply transition-all duration-300 hover:scale-105 hover:shadow-elevated;
-  }
-  
-  .hover-glow {
-    @apply transition-all duration-300 hover:shadow-glow;
+  .shadow-bark {
+    box-shadow: var(--shadow-bark);
   }
 
-  /* Анимации листьев */
+  .shadow-moss {
+    box-shadow: var(--shadow-moss);
+  }
+
+  .shadow-modern {
+    box-shadow: var(--shadow-modern);
+  }
+
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+
+  /* 🌿 СОВРЕМЕННЫЕ ИНТЕРАКТИВНЫЕ ЭФФЕКТЫ */
+  .hover-lift {
+    transition: var(--transition-smooth);
+  }
+  
+  .hover-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-elevated);
+  }
+
+  .hover-nature {
+    transition: var(--transition-nature);
+  }
+
+  .hover-nature:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-nature);
+  }
+
+  /* 🎭 СОВРЕМЕННЫЕ АНИМАЦИИ */
+  .animate-scale-bounce {
+    animation: scale-bounce 0.6s ease-out;
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.8s ease-out;
+  }
+
+  .animate-pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
   .animate-leaf-float {
     animation: leaf-float 6s ease-in-out infinite;
   }
@@ -194,7 +264,77 @@ All colors MUST be HSL.
     animation: nature-pulse 2s ease-in-out infinite;
   }
 
-  /* Крутые кнопки */
+  .animate-forest-glow {
+    animation: forest-glow 3s ease-in-out infinite;
+  }
+
+  @keyframes scale-bounce {
+    0% {
+      transform: scale(0.8);
+      opacity: 0;
+    }
+    50% {
+      transform: scale(1.05);
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  @keyframes fade-in {
+    0% {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.7;
+    }
+  }
+
+  @keyframes leaf-float {
+    0%, 100% { 
+      transform: translateY(0px) rotate(0deg); 
+    }
+    33% { 
+      transform: translateY(-10px) rotate(2deg); 
+    }
+    66% { 
+      transform: translateY(-5px) rotate(-1deg); 
+    }
+  }
+
+  @keyframes nature-pulse {
+    0%, 100% { 
+      opacity: 1; 
+      transform: scale(1); 
+    }
+    50% { 
+      opacity: 0.8; 
+      transform: scale(1.05); 
+    }
+  }
+
+  @keyframes forest-glow {
+    0%, 100% { 
+      box-shadow: var(--shadow-nature);
+    }
+    50% { 
+      box-shadow: var(--shadow-glow);
+    }
+  }
+
+  /* 🎨 СОВРЕМЕННЫЕ КНОПКИ */
   .btn-nature {
     @apply bg-gradient-forest text-white px-6 py-3 rounded-xl font-medium;
     @apply hover:scale-105 hover:shadow-glow transition-all duration-300;
@@ -207,39 +347,285 @@ All colors MUST be HSL.
     @apply active:scale-95;
   }
 
-  /* Карточки с природной эстетикой */
+  .btn-spring {
+    @apply bg-gradient-leaves text-white px-6 py-3 rounded-xl font-medium;
+    @apply hover:scale-105 hover:shadow-glow transition-all duration-300;
+    @apply active:scale-95;
+  }
+
+  .btn-bark {
+    @apply bg-gradient-bark text-white px-6 py-3 rounded-xl font-medium;
+    @apply hover:scale-105 hover:shadow-bark transition-all duration-300;
+    @apply active:scale-95;
+  }
+
+  /* 🏔️ СОВРЕМЕННЫЕ КАРТОЧКИ */
   .card-nature {
-    @apply bg-card border border-border rounded-2xl p-6;
-    @apply hover-lift shadow-nature backdrop-blur-sm;
+    @apply bg-white border border-gray-200 rounded-2xl p-6;
+    @apply hover-lift shadow-card backdrop-blur-sm;
     background: var(--gradient-card);
   }
 
-  /* Стеклянный эффект */
+  .card-forest {
+    @apply bg-white border border-gray-200 rounded-2xl;
+    @apply hover-nature shadow-card;
+    background: linear-gradient(135deg, hsl(0 0% 100%), hsl(var(--morning-mist)));
+  }
+
+  .card-bark {
+    @apply bg-white border border-gray-300 rounded-2xl;
+    @apply hover-lift shadow-bark;
+    background: linear-gradient(135deg, hsl(0 0% 100%), hsl(var(--silver-birch)));
+  }
+
+  .card-modern {
+    @apply bg-white border border-gray-200 rounded-2xl p-6;
+    @apply shadow-modern hover:shadow-card transition-all duration-300;
+  }
+
+  .card-success {
+    @apply bg-white border border-green-200 rounded-2xl p-6;
+    @apply shadow-modern hover:shadow-card transition-all duration-300;
+    background: linear-gradient(135deg, hsl(0 0% 100%), hsl(var(--forest-grass) / 0.05));
+  }
+
+  /* 👥 СОВРЕМЕННЫЕ КАРТОЧКИ СОТРУДНИКОВ */
+  .employee-card {
+    @apply bg-white border border-gray-200 rounded-2xl;
+    @apply hover-lift shadow-card;
+    transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+  }
+
+  .employee-card:hover {
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: var(--shadow-card);
+  }
+
+  /* 💎 СОВРЕМЕННЫЕ СТЕКЛЯННЫЕ ЭФФЕКТЫ */
   .glass-effect {
     @apply backdrop-blur-md bg-white/80 border border-white/20;
     @apply shadow-nature rounded-2xl;
   }
-}
 
-@keyframes leaf-float {
-  0%, 100% { 
-    transform: translateY(0px) rotate(0deg); 
+  .glass-moss {
+    @apply backdrop-blur-md bg-white/70 border border-white/30;
+    @apply shadow-moss rounded-2xl;
   }
-  33% { 
-    transform: translateY(-10px) rotate(2deg); 
-  }
-  66% { 
-    transform: translateY(-5px) rotate(-1deg); 
-  }
-}
 
-@keyframes nature-pulse {
-  0%, 100% { 
-    opacity: 1; 
-    transform: scale(1); 
+  /* 🌿 СОВРЕМЕННЫЕ ЦВЕТОВЫЕ КЛАССЫ */
+  .text-deep-pine {
+    color: hsl(var(--deep-pine));
   }
-  50% { 
-    opacity: 0.8; 
-    transform: scale(1.05); 
+
+  .text-young-spruce {
+    color: hsl(var(--young-spruce));
+  }
+
+  .text-forest-grass {
+    color: hsl(var(--forest-grass));
+  }
+
+  .text-spring-leaf {
+    color: hsl(var(--spring-leaf));
+  }
+
+  .text-pine-cone {
+    color: hsl(var(--pine-cone));
+  }
+
+  .text-morning-mist {
+    color: hsl(var(--morning-mist));
+  }
+
+  /* 🎨 СОВРЕМЕННЫЕ ФОНОВЫЕ КЛАССЫ */
+  .bg-deep-pine {
+    background-color: hsl(var(--deep-pine));
+  }
+
+  .bg-young-spruce {
+    background-color: hsl(var(--young-spruce));
+  }
+
+  .bg-forest-grass {
+    background-color: hsl(var(--forest-grass));
+  }
+
+  .bg-spring-leaf {
+    background-color: hsl(var(--spring-leaf));
+  }
+
+  .bg-pine-cone {
+    background-color: hsl(var(--pine-cone));
+  }
+
+  .bg-morning-mist {
+    background-color: hsl(var(--morning-mist));
+  }
+
+  /* 📱 СОВРЕМЕННЫЕ КОМПОНЕНТЫ */
+  .modern-header {
+    @apply bg-white border border-gray-100 rounded-2xl px-6 py-6;
+    @apply shadow-lg;
+    background: linear-gradient(135deg, hsl(0 0% 100%), hsl(var(--morning-mist) / 0.3));
+  }
+
+  .modern-sidebar {
+    @apply bg-white border-r border-gray-200;
+    @apply shadow-modern;
+  }
+
+  .modern-search {
+    @apply bg-white border border-gray-300 rounded-xl px-4 py-3;
+    @apply focus:border-green-500 focus:ring-2 focus:ring-green-200;
+    @apply transition-all duration-300;
+  }
+
+  .modern-button {
+    @apply bg-gradient-forest text-white px-6 py-3 rounded-xl font-medium;
+    @apply hover:scale-105 hover:shadow-glow transition-all duration-300;
+    @apply active:scale-95 shadow-modern;
+  }
+
+  .modern-button-secondary {
+    @apply bg-white border border-gray-200 text-gray-700 px-6 py-3 rounded-xl font-medium;
+    @apply hover:bg-gray-50 hover:border-green-300 hover:shadow-md transition-all duration-300;
+    @apply shadow-sm;
+  }
+
+  .modern-button-blue {
+    @apply bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100;
+    @apply text-blue-700 border border-blue-200 px-6 py-3 rounded-xl font-medium;
+    @apply hover:shadow-md transition-all duration-300 shadow-sm;
+  }
+
+  .modern-button-green {
+    @apply bg-gradient-to-r from-green-50 to-emerald-50 hover:from-green-100 hover:to-emerald-100;
+    @apply text-green-700 border border-green-200 px-6 py-3 rounded-xl font-medium;
+    @apply hover:shadow-md transition-all duration-300 shadow-sm;
+  }
+
+  .modern-badge {
+    background-color: hsl(var(--forest-grass));
+    color: white;
+    padding: 4px 12px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .modern-badge-success {
+    background-color: hsl(var(--spring-leaf));
+    color: white;
+    padding: 4px 12px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .modern-badge-warning {
+    background-color: hsl(var(--dry-leaf));
+    color: white;
+    padding: 4px 12px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .modern-stats-card {
+    @apply bg-white border border-gray-200 rounded-2xl p-6;
+    @apply shadow-modern hover:shadow-card transition-all duration-300;
+  }
+
+  .modern-stats-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, hsl(var(--spring-leaf)), hsl(var(--forest-grass)));
+  }
+
+  .modern-stats-icon svg {
+    color: white;
+  }
+
+  .modern-chart-card {
+    background-color: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: var(--shadow-modern);
+  }
+
+  .modern-table {
+    background-color: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: var(--shadow-modern);
+  }
+
+  .modern-table-header {
+    background-color: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 24px;
+  }
+
+  .modern-table-row {
+    border-bottom: 1px solid #f3f4f6;
+    transition: background-color 0.2s ease;
+  }
+
+  .modern-table-row:hover {
+    background-color: #f9fafb;
+  }
+
+  .modern-table-cell {
+    padding: 24px;
+  }
+
+  /* 🗺️ СТИЛИ ДЛЯ КАРТЫ LEAFLET */
+  .leaflet-container {
+    width: 100%;
+    height: 100%;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .leaflet-popup-content-wrapper {
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+
+  .leaflet-popup-content {
+    margin: 0;
+    padding: 0;
+  }
+
+  .custom-marker {
+    background: transparent;
+    border: none;
+  }
+
+  .leaflet-control-attribution {
+    font-size: 10px;
+    color: #6b7280;
+  }
+
+  .leaflet-control-zoom {
+    border: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  .leaflet-control-zoom a {
+    background: white;
+    color: #374151;
+    border: 1px solid #e5e7eb;
+  }
+
+  .leaflet-control-zoom a:hover {
+    background: #f9fafb;
+    color: #1f2937;
   }
 }

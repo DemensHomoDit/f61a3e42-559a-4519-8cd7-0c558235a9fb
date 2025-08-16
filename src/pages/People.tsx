@@ -44,7 +44,7 @@ import {
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Plus, Search, Download, Edit, Trash2, Users, TrendingUp, Award } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { downloadCSV } from "@/lib/export";
 import EmployeeStats from "@/modules/people/EmployeeStats";
 import EmployeesGrid from "@/modules/people/EmployeesGrid";
@@ -55,6 +55,7 @@ const canonical = typeof window !== 'undefined' ? window.location.href : '';
 const People = () => {
   const qc = useQueryClient();
   const toast = useToast();
+  const navigate = useNavigate();
   
   const { data: users = [] } = useQuery<User[]>({ queryKey: ["users"], queryFn: getUsers });
 
@@ -64,24 +65,20 @@ const People = () => {
   const [editingUser, setEditingUser] = useState<any>(null);
   
   const [formData, setFormData] = useState({
-    username: '',
     full_name: '',
-    role: 'employee',
-    phone: '',
-    email: '',
-    position: '',
-    department: '',
-    hire_date: '',
-    salary: ''
+    role: 'worker',
+    position: ''
   });
 
   const createMutation = useMutation({
     mutationFn: createUser,
-    onSuccess: () => {
+    onSuccess: (newUser) => {
       qc.invalidateQueries({ queryKey: ['users'] });
       toast({ title: 'Сотрудник добавлен', status: 'success' });
       onClose();
-      setFormData({ username: '', full_name: '', role: 'employee', phone: '', email: '', position: '', department: '', hire_date: '', salary: '' });
+      setFormData({ full_name: '', role: 'worker', position: '' });
+      // Перенаправляем на профиль нового сотрудника
+      navigate(`/people/${newUser.id}/profile`);
     },
     onError: () => {
       toast({ title: 'Ошибка добавления сотрудника', status: 'error' });
@@ -122,27 +119,23 @@ const People = () => {
   }, [users, search]);
 
   const handleCreate = () => {
+    console.log('People: handleCreate вызван с данными:', formData);
     createMutation.mutate(formData);
   };
 
   const handleEdit = (user: User) => {
     setEditingUser(user);
     setFormData({
-      username: user.username || '',
       full_name: user.full_name || '',
-      role: user.role || 'employee',
-      phone: user.phone || '',
-      email: user.email || '',
-      position: user.position || '',
-      department: user.department || '',
-      hire_date: user.hire_date || '',
-      salary: user.salary?.toString() || ''
+      role: user.role || 'worker',
+      position: user.position || ''
     });
     onEditOpen();
   };
 
   const handleUpdate = () => {
     if (editingUser) {
+      console.log('People: handleUpdate вызван с ID:', editingUser.id, 'и данными:', formData);
       updateMutation.mutate({ id: editingUser.id, data: formData });
     }
   };
@@ -164,15 +157,15 @@ const People = () => {
         <link rel="canonical" href={canonical} />
       </Helmet>
 
-      <Box p={6} bg="bg.primary" minH="100vh">
-        {/* Заголовок и статистика */}
-        <VStack spacing={6} align="stretch" mb={8}>
+      <Box className="bg-gray-50 min-h-screen p-6">
+        {/* Современный хедер */}
+        <Box className="modern-header mb-8">
           <HStack justify="space-between" align="center">
-            <VStack align="start" spacing={2}>
-              <Heading as="h1" size="h1" color="text.primary">
+            <VStack align="start" spacing={1}>
+              <Text className="text-2xl font-bold text-gray-800">
                 Сотрудники
-              </Heading>
-              <Text color="text.secondary" fontSize="sm">
+              </Text>
+              <Text className="text-gray-600">
                 Управление персоналом и кадровый учет
               </Text>
             </VStack>
@@ -180,7 +173,7 @@ const People = () => {
             <HStack spacing={3}>
               <Button
                 leftIcon={<Download size={16} />}
-                variant="secondary"
+                className="modern-button-secondary"
                 size="sm"
                 onClick={exportData}
               >
@@ -188,7 +181,7 @@ const People = () => {
               </Button>
               <Button
                 leftIcon={<Plus size={16} />}
-                variant="primary"
+                className="modern-button"
                 size="sm"
                 onClick={onOpen}
               >
@@ -196,93 +189,80 @@ const People = () => {
               </Button>
             </HStack>
           </HStack>
+        </Box>
 
-          {/* Статистика */}
-          <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6}>
-            <Card variant="elevated">
-              <CardBody>
-                <HStack spacing={4}>
-                  <Box p={3} bg="brand.50" borderRadius="lg">
-                    <Users size={20} color="var(--chakra-colors-brand-500)" />
-                  </Box>
-                  <VStack align="start" spacing={1}>
-                    <Stat>
-                      <StatNumber fontSize="2xl" fontWeight="700" color="text.primary">
-                        {users.length}
-                      </StatNumber>
-                      <StatLabel fontSize="sm" color="text.secondary" fontWeight="500">
-                        Всего сотрудников
-                      </StatLabel>
-                    </Stat>
-                  </VStack>
-                </HStack>
-              </CardBody>
-            </Card>
+        {/* Статистика */}
+        <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6} mb={8}>
+          <Box className="modern-stats-card">
+            <HStack spacing={4}>
+              <Box className="modern-stats-icon">
+                <Users size={24} color="white" />
+              </Box>
+              <VStack align="start" spacing={1}>
+                <Text fontSize="3xl" fontWeight="700" color="gray.800">
+                  {users.length}
+                </Text>
+                <Text fontSize="sm" color="gray.600" fontWeight="500">
+                  Всего сотрудников
+                </Text>
+              </VStack>
+            </HStack>
+          </Box>
 
-            <Card variant="elevated">
-              <CardBody>
-                <HStack spacing={4}>
-                  <Box p={3} bg="accent.success" bgOpacity="0.1" borderRadius="lg">
-                    <TrendingUp size={20} color="var(--chakra-colors-accent-success)" />
-                  </Box>
-                  <VStack align="start" spacing={1}>
-                    <Stat>
-                      <StatNumber fontSize="2xl" fontWeight="700" color="text.primary">
-                        {users.filter(u => u.role === 'worker').length}
-                      </StatNumber>
-                      <StatLabel fontSize="sm" color="text.secondary" fontWeight="500">
-                        Активных рабочих
-                      </StatLabel>
-                    </Stat>
-                  </VStack>
-                </HStack>
-              </CardBody>
-            </Card>
+          <Box className="modern-stats-card">
+            <HStack spacing={4}>
+              <Box className="modern-stats-icon">
+                <TrendingUp size={24} color="white" />
+              </Box>
+              <VStack align="start" spacing={1}>
+                <Text fontSize="3xl" fontWeight="700" color="gray.800">
+                  {users.filter(u => u.role === 'worker').length}
+                </Text>
+                <Text fontSize="sm" color="gray.600" fontWeight="500">
+                  Активных рабочих
+                </Text>
+              </VStack>
+            </HStack>
+          </Box>
 
-            <Card variant="elevated">
-              <CardBody>
-                <HStack spacing={4}>
-                  <Box p={3} bg="accent.info" bgOpacity="0.1" borderRadius="lg">
-                    <Award size={20} color="var(--chakra-colors-accent-info)" />
-                  </Box>
-                  <VStack align="start" spacing={1}>
-                    <Stat>
-                      <StatNumber fontSize="2xl" fontWeight="700" color="text.primary">
-                        {users.filter(u => u.role === 'foreman').length}
-                      </StatNumber>
-                      <StatLabel fontSize="sm" color="text.secondary" fontWeight="500">
-                        Прорабов
-                      </StatLabel>
-                    </Stat>
-                  </VStack>
-                </HStack>
-              </CardBody>
-            </Card>
-          </SimpleGrid>
-        </VStack>
+          <Box className="modern-stats-card">
+            <HStack spacing={4}>
+              <Box className="modern-stats-icon">
+                <Award size={24} color="white" />
+              </Box>
+              <VStack align="start" spacing={1}>
+                <Text fontSize="3xl" fontWeight="700" color="gray.800">
+                  {users.filter(u => u.role === 'foreman').length}
+                </Text>
+                <Text fontSize="sm" color="gray.600" fontWeight="500">
+                  Прорабов
+                </Text>
+              </VStack>
+            </HStack>
+          </Box>
+        </SimpleGrid>
 
         {/* Поиск и фильтры */}
-        <Card variant="elevated" mb={6}>
-          <CardBody>
-            <HStack spacing={4}>
-              <InputGroup maxW="400px">
-                <InputLeftElement pointerEvents="none">
-                  <Search size={16} color="var(--chakra-colors-text-secondary)" />
-                </InputLeftElement>
-                <Input
-                  placeholder="Поиск по имени, должности или отделу..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  fontSize="sm"
-                />
-              </InputGroup>
-              
-              <Text fontSize="sm" color="text.secondary">
-                Найдено: {filteredUsers.length} из {users.length}
-              </Text>
-            </HStack>
-          </CardBody>
-        </Card>
+        <Box className="modern-card mb-8">
+          <HStack spacing={4} p={6}>
+            <InputGroup maxW="400px">
+              <InputLeftElement pointerEvents="none">
+                <Search size={16} color="gray.400" />
+              </InputLeftElement>
+              <Input
+                className="modern-search"
+                placeholder="Поиск по имени, должности или отделу..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                fontSize="sm"
+              />
+            </InputGroup>
+            
+            <Text fontSize="sm" color="gray.600">
+              Найдено: {filteredUsers.length} из {users.length}
+            </Text>
+          </HStack>
+        </Box>
 
         {/* Сетка сотрудников */}
         <EmployeesGrid 

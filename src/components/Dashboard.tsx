@@ -38,15 +38,16 @@ import {
 import {
   Building, Users, CheckSquare, DollarSign, TrendingUp, Clock, AlertTriangle, Bell, Sparkles, Package, Map as MapIcon, Settings as SettingsIcon
 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
-import { getObjects as apiObjects, getUsers as apiUsers, getTasks as apiTasks, getPurchases, getSalaries, getAbsences, getMetrics } from "@/api/client";
-import { useMemo, useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getObjects as apiObjects, getUsers as apiUsers, getTasks as apiTasks, getPurchases, getSalaries, getAbsences, getMetrics, getReadNotifications, markNotificationAsRead, markAllNotificationsAsRead, clearReadNotifications } from "@/api/client";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { DEFAULT_DASHBOARD_CONFIG, loadDashboardConfig, saveDashboardConfig, type DashboardConfig, type DashboardWidgetKey } from "@/lib/dashboardConfig";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RTooltip, BarChart, Bar, XAxis, YAxis, Legend, CartesianGrid, Label as RLabel, LineChart, Line } from "recharts";
+import { ResponsiveContainer, Tooltip as RTooltip, XAxis, YAxis, Legend, CartesianGrid, LineChart, Line } from "recharts";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
+import { NotificationsModal } from "./dashboard/NotificationsModal";
 
 // Простое геокодирование через Nominatim с локальным кэшем
 async function geocodeAddress(address: string): Promise<{ lat: number; lon: number } | null> {
@@ -69,6 +70,7 @@ async function geocodeAddress(address: string): Promise<{ lat: number; lon: numb
 export function Dashboard() {
   const { user } = useAuth();
   const { userRole, getRoleName, userPermissions } = usePermissions();
+  const queryClient = useQueryClient();
   
   const { data: metrics, isLoading: mLoading } = useQuery({ queryKey: ["metrics"], queryFn: getMetrics, refetchInterval: 30_000 });
   const { data: objects = [], isLoading: oLoading } = useQuery({ queryKey: ["objects"], queryFn: apiObjects, refetchInterval: 30_000 });
@@ -77,25 +79,34 @@ export function Dashboard() {
   const { data: purchases = [], isLoading: pLoading } = useQuery({ queryKey: ["purchases"], queryFn: getPurchases, refetchInterval: 60_000 });
   const { data: salaries = [], isLoading: sLoading } = useQuery({ queryKey: ["salaries"], queryFn: getSalaries, refetchInterval: 60_000 });
   const { data: absences = [], isLoading: aLoading } = useQuery({ queryKey: ["absences"], queryFn: getAbsences, refetchInterval: 60_000 });
-  // Реальные уведомления: формируем из задач и закупок
-  const notificationsDerived = useMemo(() => {
-    const out: { id: string; title: string; type: string; date?: string; read?: boolean }[] = [];
-    (tasks as any[]).forEach((t: any) => {
-      if (t.status === 'overdue') {
-        out.push({ id: `t-${t.id}`, title: `Просрочена задача: ${t.title}`, type: 'warning', date: t.deadline, read: false });
-      }
-      if (t.status === 'done') {
-        out.push({ id: `td-${t.id}`, title: `Задача выполнена: ${t.title}`, type: 'success', date: t.completed_at, read: true });
-      }
-    });
-    (purchases as any[]).forEach((p: any) => {
-      const st = (p.status ?? '').toLowerCase();
-      if (st === 'completed') out.push({ id: `p-${p.id}`, title: `Закупка выполнена: ${p.item}`, type: 'success', date: p.date, read: true });
-      else out.push({ id: `p-${p.id}`, title: `Новая закупка: ${p.item}`, type: 'info', date: p.date, read: false });
-    });
-    return out.slice(0, 20);
-  }, [tasks, purchases]);
-  const unreadCount = notificationsDerived.filter(n => !n.read).length;
+  const { data: readNotificationsData = [], isLoading: rnLoading } = useQuery({ queryKey: ["readNotifications"], queryFn: getReadNotifications, refetchInterval: 30_000 });
+  
+  // Мутации для работы с прочитанными уведомлениями
+  const markAsReadMutation = useMutation({
+    mutationFn: markNotificationAsRead,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["readNotifications"] });
+    }
+  });
+  
+  const markAllAsReadMutation = useMutation({
+    mutationFn: markAllNotificationsAsRead,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["readNotifications"] });
+    }
+  });
+  
+  const clearReadMutation = useMutation({
+    mutationFn: clearReadNotifications,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["readNotifications"] });
+    }
+  });
+  
+  // Преобразуем массив в Set для удобства
+  const readNotifications = useMemo(() => new Set(readNotificationsData), [readNotificationsData]);
+  
+  // Подсчет просроченных задач
   const overdueCount = useMemo(() => {
     const now = Date.now();
     return (tasks as any[]).filter((t:any) => {
@@ -104,6 +115,83 @@ export function Dashboard() {
       return !isNaN(d) && d < now && t.status !== 'done';
     }).length;
   }, [tasks]);
+
+  // Сотрудники, которые не вышли на работу сегодня
+  const absentEmployees = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const todayAbsences = (absences as any[]).filter((a: any) => {
+      const absenceDate = a.date ? new Date(a.date).toISOString().split('T')[0] : null;
+      return absenceDate === today;
+    });
+    
+    // Получаем ID сотрудников, которые сегодня отсутствуют
+    const absentUserIds = new Set(todayAbsences.map((a: any) => a.user_id));
+    
+    // Возвращаем сотрудников, которые сегодня отсутствуют
+    return (users as any[]).filter((u: any) => absentUserIds.has(u.id));
+  }, [absences, users]);
+
+  // Сотрудники без задач (простой)
+  const idleEmployees = useMemo(() => {
+    const assignedUserIds = new Set((tasks as any[]).map((t: any) => t.assignee_id).filter(Boolean));
+    return (users as any[]).filter((u: any) => !assignedUserIds.has(u.id));
+  }, [tasks, users]);
+
+  // Объекты без активных задач
+  const inactiveObjects = useMemo(() => {
+    const objectsWithTasks = new Set((tasks as any[]).filter((t: any) => t.status !== 'done').map((t: any) => t.object_id));
+    return (objects as any[]).filter((o: any) => !objectsWithTasks.has(o.id));
+  }, [tasks, objects]);
+  
+  // Реальные уведомления: формируем из задач и закупок
+  const notificationsDerived = useMemo(() => {
+    const out: { id: string; title: string; type: string; date?: string; read?: boolean }[] = [];
+    
+    // Уведомления о задачах
+    (tasks as any[]).forEach((t: any) => {
+      if (t.status === 'overdue') {
+        out.push({ id: `t-${t.id}`, title: `Просрочена задача: ${t.title}`, type: 'warning', date: t.deadline, read: false });
+      }
+      if (t.status === 'done') {
+        out.push({ id: `td-${t.id}`, title: `Задача выполнена: ${t.title}`, type: 'success', date: t.completed_at, read: true });
+      }
+    });
+    
+    // Уведомления о закупках
+    (purchases as any[]).forEach((p: any) => {
+      const st = (p.status ?? '').toLowerCase();
+      if (st === 'completed') {
+        out.push({ id: `p-${p.id}`, title: `Закупка выполнена: ${p.item}`, type: 'success', date: p.date, read: true });
+      } else {
+        out.push({ id: `p-${p.id}`, title: `Новая закупка: ${p.item}`, type: 'info', date: p.date, read: false });
+      }
+    });
+    
+    // Уведомления о предупреждениях
+    if (overdueCount > 0) {
+      out.push({ id: 'w-overdue', title: `Просрочено задач: ${overdueCount}`, type: 'warning', date: new Date().toISOString(), read: false });
+    }
+    
+    if (absentEmployees.length > 0) {
+      out.push({ id: 'w-absent', title: `Не вышли на работу: ${absentEmployees.length} сотрудников`, type: 'warning', date: new Date().toISOString(), read: false });
+    }
+    
+    if (idleEmployees.length > 0) {
+      out.push({ id: 'w-idle', title: `Сотрудников в простое: ${idleEmployees.length}`, type: 'info', date: new Date().toISOString(), read: false });
+    }
+    
+    if (inactiveObjects.length > 0) {
+      out.push({ id: 'w-inactive', title: `Объектов без активных задач: ${inactiveObjects.length}`, type: 'info', date: new Date().toISOString(), read: false });
+    }
+    
+    return out.slice(0, 20);
+  }, [tasks, purchases, overdueCount, absentEmployees.length, idleEmployees.length, inactiveObjects.length]);
+  
+  // Обновляем количество непрочитанных уведомлений
+  const actualUnreadCount = useMemo(() => {
+    // Считаем только те уведомления, которые не прочитаны
+    return notificationsDerived.filter(n => !readNotifications.has(n.id)).length;
+  }, [notificationsDerived, readNotifications]);
   const criticalTasks = useMemo(() => {
     const now = Date.now();
     return (tasks as any[]).filter((t:any) => {
@@ -133,12 +221,6 @@ export function Dashboard() {
   const incomes = 0; // заглушка под интеграцию
   const overdueTasks = metrics?.tasks?.overdue ?? 0;
 
-  // Build task status distribution
-  const taskStatusData = useMemo(() => {
-    const map: Record<string, number> = {};
-    (tasks as any[]).forEach(t => { const s = (t.status ?? 'new'); map[s] = (map[s] ?? 0) + 1; });
-    return Object.entries(map).map(([name, value]) => ({ name, value }));
-  }, [tasks]);
   const STATUS_RU: Record<string,string> = { new: 'Новые', in_progress: 'В работе', overdue: 'Просрочены', done: 'Завершены' };
   const LEGEND_RU: Record<string,string> = { purchases: 'Закупки', salaries: 'Зарплаты', absences: 'Удержания/Авансы' };
   const TYPE_RU: Record<string,string> = { warning: 'Внимание', error: 'Ошибка', success: 'Готово', info: 'Инфо', task: 'Задача', finance: 'Финансы', purchase: 'Закупка', system: 'Система' };
@@ -184,8 +266,6 @@ export function Dashboard() {
     if (!s && e) return `время: до ${e}`;
     return 'время: —';
   };
-  const taskStatusLocalized = useMemo(() => taskStatusData.map(d => ({ name: STATUS_RU[d.name] ?? d.name, value: d.value })), [taskStatusData]);
-  const COLORS = ["#2d6c3f", "#3a8547", "#6ea96f", "#94a3b8"]; // зелёные/серые
 
   // Build finance monthly bars (покупки/зарплаты/удержания)
   const monthKey = (d?: string) => {
@@ -261,7 +341,40 @@ export function Dashboard() {
   }, []);
   const [dragKey, setDragKey] = useState<DashboardWidgetKey | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const ALL_WIDGETS: DashboardWidgetKey[] = Array.from(new Set(DEFAULT_DASHBOARD_CONFIG.order));
+  
+  // Функция для отметки всех уведомлений как прочитанных
+  const markAllAsRead = () => {
+    const allNotificationIds = notificationsDerived.map(n => n.id);
+    
+    if (allNotificationIds.length === 0) {
+      return;
+    }
+    
+    markAllAsReadMutation.mutate(allNotificationIds);
+  };
+  
+  // Функция для отметки одного уведомления как прочитанного
+  const markAsRead = (notificationId: string) => {
+    markAsReadMutation.mutate(notificationId);
+  };
+  
+  // Функция для очистки прочитанных уведомлений
+  const clearRead = () => {
+    clearReadMutation.mutate();
+  };
+  
+  // Очистка старых прочитанных уведомлений (которых больше нет в списке)
+  useEffect(() => {
+    const currentNotificationIds = new Set(notificationsDerived.map(n => n.id));
+    const newReadSet = new Set(Array.from(readNotifications).filter(id => currentNotificationIds.has(id)));
+    
+    if (newReadSet.size !== readNotifications.size) {
+      // setReadNotifications(newReadSet); // Теперь очистка происходит на сервере
+    }
+  }, [notificationsDerived, readNotifications]);
+  
   // Фильтры таблицы последних задач
   const [ttStatus, setTtStatus] = useState<string>('all');
   const [ttAssignee, setTtAssignee] = useState<string>('all');
@@ -304,344 +417,600 @@ export function Dashboard() {
     return idle.map(u => ({ id:u.id, name:u.full_name, count:0 }));
   }, [userTaskCount, users]);
 
-  const loadingAny = mLoading || oLoading || uLoading || tLoading || pLoading || sLoading || aLoading;
+  const loadingAny = mLoading || oLoading || uLoading || tLoading || pLoading || sLoading || aLoading || rnLoading;
 
   const sections: Record<DashboardWidgetKey, JSX.Element> = {
     kpi: (
       <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={4}>
-        <Card as={Link} to="/objects" _hover={{ boxShadow: 'md' }}>
-          <CardHeader p={4}>
-            <HStack justify="space-between">
-              <Heading size="sm" color="brand.500">Объекты (всего)</Heading>
-              <Icon as={Building} boxSize={4} color="brand.500" />
+        <Box className="modern-stats-card" as={Link} to="/objects">
+          <HStack justify="space-between" align="start">
+            <VStack align="start" spacing={2}>
+              <Text className="text-3xl font-bold text-gray-800">
+                {objects.length}
+              </Text>
+              <Text className="text-gray-600 text-sm">
+                Объектов (всего)
+              </Text>
+            </VStack>
+            <Box className="modern-stats-icon">
+              <Building size={24} color="white" />
+            </Box>
             </HStack>
-          </CardHeader>
-          <CardBody pt={0} px={4} pb={4}>
-            {oLoading ? <Skeleton height="28px" /> : <Text fontSize="2xl" fontWeight="bold" color="text.primary">{objects.length}</Text>}
-            <HStack spacing={1} color="text.secondary" fontSize="xs">
-              <Icon as={TrendingUp} boxSize={3} />
-              <Text>+0</Text>
+        </Box>
+        
+        <Box className="modern-stats-card" as={Link} to="/people">
+          <HStack justify="space-between" align="start">
+            <VStack align="start" spacing={2}>
+              <Text className="text-3xl font-bold text-gray-800">
+                {users.length}
+              </Text>
+              <Text className="text-gray-600 text-sm">
+                Сотрудников
+              </Text>
+            </VStack>
+            <Box className="modern-stats-icon">
+              <Users size={24} color="white" />
+            </Box>
             </HStack>
-          </CardBody>
-        </Card>
-        <Card as={Link} to="/people" _hover={{ boxShadow: 'md' }}>
-          <CardHeader p={4}>
-            <HStack justify="space-between">
-              <Heading size="sm" color="brand.500">Сотрудники</Heading>
-              <Icon as={Users} boxSize={4} color="brand.500" />
+        </Box>
+        
+        <Box className="modern-stats-card" as={Link} to="/tasks">
+          <HStack justify="space-between" align="start">
+            <VStack align="start" spacing={2}>
+              <Text className="text-3xl font-bold text-gray-800">
+                {tasks.length}
+              </Text>
+              <Text className="text-gray-600 text-sm">
+                Задач
+              </Text>
+            </VStack>
+            <Box className="modern-stats-icon">
+              <CheckSquare size={24} color="white" />
+            </Box>
             </HStack>
-          </CardHeader>
-          <CardBody pt={0} px={4} pb={4}>
-            {uLoading ? <Skeleton height="28px" /> : <Text fontSize="2xl" fontWeight="bold" color="text.primary">{users.length}</Text>}
-            <Text fontSize="xs" color="text.secondary">в системе</Text>
-          </CardBody>
-        </Card>
-        <Card as={Link} to="/tasks" _hover={{ boxShadow: 'md' }}>
-          <CardHeader p={4}>
-            <HStack justify="space_between">
-              <Heading size="sm" color="brand.500">Задачи</Heading>
-              <Icon as={CheckSquare} boxSize={4} color="brand.500" />
+        </Box>
+        
+        <Box className="modern-stats-card" as={Link} to="/finances">
+          <HStack justify="space-between" align="start">
+            <VStack align="start" spacing={2}>
+              <Text className="text-3xl font-bold text-gray-800">
+                ₽{payables.toLocaleString('ru-RU')}
+              </Text>
+              <Text className="text-gray-600 text-sm">
+                Выплаты к оплате
+              </Text>
+            </VStack>
+            <Box className="modern-stats-icon">
+              <DollarSign size={24} color="white" />
+            </Box>
             </HStack>
-          </CardHeader>
-          <CardBody pt={0} px={4} pb={4}>
-            {tLoading ? <Skeleton height="28px" /> : <Text fontSize="2xl" fontWeight="bold" color="text.primary">{tasks.length}</Text>}
-            <HStack spacing={1} fontSize="xs" color="text.secondary">
-              <Icon as={Clock} boxSize={3} />
-              <Text>просрочено: {overdueTasks}</Text>
-            </HStack>
-          </CardBody>
-        </Card>
-        <Card as={Link} to="/finances" _hover={{ boxShadow: 'md' }}>
-          <CardHeader p={4}>
-            <HStack justify="space-between">
-              <Heading size="sm" color="brand.500">Выплаты к оплате</Heading>
-              <Icon as={DollarSign} boxSize={4} color="brand.500" />
-            </HStack>
-          </CardHeader>
-          <CardBody pt={0} px={4} pb={4}>
-            {mLoading ? <Skeleton height="28px" /> : <Text fontSize="2xl" fontWeight="bold" color="text.primary">₽{payables.toLocaleString('ru-RU')}</Text>}
-            <Text fontSize="xs" color="text.secondary">за период (демо)</Text>
-          </CardBody>
-        </Card>
+        </Box>
       </SimpleGrid>
     ),
+    
     objects: (
-      <Card>
-        <CardHeader p={4}>
-          <HStack justify="space-between">
-            <Heading size="sm">Объекты в работе</Heading>
-            <Button variant="ghost" size="sm" onClick={() => toggleWidget('objects')}>
-              <Icon as={AlertTriangle} boxSize={4} />
+      <Box className="modern-card">
+        <HStack justify="space-between" align="center" mb={4}>
+          <Text className="text-lg font-semibold text-gray-800">
+            Объекты в работе
+          </Text>
+          <Button 
+            className="modern-button-secondary"
+            size="sm" 
+            onClick={() => toggleWidget('objects')}
+          >
+            <AlertTriangle size={16} />
             </Button>
           </HStack>
-        </CardHeader>
-        <CardBody pt={0} px={4} pb={4}>
+        
           {oLoading ? (
-            <VStack align="stretch" spacing={3}><Skeleton height="44px" /><Skeleton height="44px" /><Skeleton height="44px" /></VStack>
+          <VStack align="stretch" spacing={3}>
+            <Box className="h-12 bg-gray-200 rounded-xl animate-pulse" />
+            <Box className="h-12 bg-gray-200 rounded-xl animate-pulse" />
+            <Box className="h-12 bg-gray-200 rounded-xl animate-pulse" />
+          </VStack>
           ) : (
           <VStack align="stretch" spacing={3}>
             {objects.slice(0, 3).map((o: any) => (
-              <HStack as={Link} to={`/objects/${o.id}`} key={o.id} justify="space-between" p={3} bg="table.rowAlt" rounded="md" _hover={{ bg: 'gray.50' }}>
+              <HStack 
+                as={Link} 
+                to={`/objects/${o.id}`} 
+                key={o.id} 
+                justify="space-between" 
+                p={4} 
+                className="bg-gray-50 rounded-xl border border-gray-200 hover:bg-gray-100 transition-colors"
+              >
                 <VStack align="start" spacing={1}>
-                  <Text fontWeight={600} color="brand.500">{o.name}</Text>
-                  <Text fontSize="sm" color="text.secondary">{o.address || 'Адрес не указан'}</Text>
+                  <Text className="font-semibold text-gray-800">{o.name}</Text>
+                  <Text className="text-sm text-gray-600">{o.address || 'Адрес не указан'}</Text>
                 </VStack>
-                <Badge colorScheme="green">В работе</Badge>
+                <Box className="modern-badge-success">
+                  В работе
+                </Box>
               </HStack>
             ))}
             {objects.length > 3 && (
-              <Button variant="ghost" size="sm" as={Link} to="/objects">
+              <Button 
+                className="modern-button-secondary w-full"
+                as={Link} 
+                to="/objects"
+              >
                 Показать все ({objects.length})
               </Button>
             )}
           </VStack>
           )}
-        </CardBody>
-      </Card>
+      </Box>
     ),
+    
     tasks: (
-      <Card>
-        <CardHeader p={4}>
-          <HStack justify="space-between">
-            <Heading size="sm">Критические задачи</Heading>
-            <Button variant="ghost" size="sm" onClick={() => toggleWidget('tasks')}>
-              <Icon as={AlertTriangle} boxSize={4} />
+      <Box className="modern-card">
+        <HStack justify="space-between" align="center" mb={4}>
+          <Text className="text-lg font-semibold text-gray-800">
+            Критические задачи
+          </Text>
+          <Button 
+            className="modern-button-secondary"
+            size="sm" 
+            onClick={() => toggleWidget('tasks')}
+          >
+            <AlertTriangle size={16} />
             </Button>
           </HStack>
-        </CardHeader>
-        <CardBody pt={0} px={4} pb={4}>
+        
           {tLoading ? (
-            <VStack align="stretch" spacing={3}><Skeleton height="44px" /><Skeleton height="44px" /><Skeleton height="44px" /></VStack>
+          <VStack align="stretch" spacing={3}>
+            <Box className="h-16 bg-gray-200 rounded-xl animate-pulse" />
+            <Box className="h-16 bg-gray-200 rounded-xl animate-pulse" />
+            <Box className="h-16 bg-gray-200 rounded-xl animate-pulse" />
+          </VStack>
           ) : (
           <VStack align="stretch" spacing={3}>
               {criticalTasks.slice(0, 3).map((t: any) => {
                 const statusText = (STATUS_RU as any)[t.status ?? 'new'] ?? '—';
                 const assignee = (users as any[]).find((u:any) => u.id === t.assignee_id);
                 return (
-                  <HStack as={Link} to={`/tasks/${t.id}`} key={t.id} justify="space-between" p={3} bg="table.rowAlt" rounded="md" _hover={{ bg: 'gray.50' }}>
+                <HStack 
+                  as={Link} 
+                  to={`/tasks/${t.id}`} 
+                  key={t.id} 
+                  justify="space-between" 
+                  p={4} 
+                  className="bg-gray-50 rounded-xl border border-gray-200 hover:bg-gray-100 transition-colors"
+                >
                 <VStack align="start" spacing={1}>
-                  <Text fontWeight={600}>{t.title}</Text>
-                      <Text fontSize="sm" color="text.secondary">Исполнитель: {assignee?.full_name ?? '—'}</Text>
-                      <Text fontSize="sm" color="text.secondary">{formatDateOnly(t.deadline)}</Text>
-                      <Text fontSize="sm" color="text.secondary">{formatTimeRange(t.start_time, t.end_time)}</Text>
+                    <Text className="font-semibold text-gray-800">{t.title}</Text>
+                    <Text className="text-sm text-gray-600">Исполнитель: {assignee?.full_name ?? '—'}</Text>
+                    <Text className="text-sm text-gray-600">{formatDateOnly(t.deadline)}</Text>
                 </VStack>
-                    <Badge colorScheme={t.status === 'overdue' ? 'red' : 'red'}>{statusText}</Badge>
+                  <Box className="modern-badge-warning">
+                    {statusText}
+                  </Box>
               </HStack>
                 );
               })}
               {criticalTasks.length === 0 && (
-                <Text fontSize="sm" color="text.secondary">Критических задач нет</Text>
+              <Text className="text-gray-600 text-center py-4">
+                Критических задач нет
+              </Text>
               )}
             {tasks.length > 3 && (
-              <Button variant="ghost" size="sm" as={Link} to="/tasks">
+              <Button 
+                className="modern-button-secondary w-full"
+                as={Link} 
+                to="/tasks"
+              >
                 Показать все ({tasks.length})
               </Button>
             )}
           </VStack>
           )}
-        </CardBody>
-      </Card>
+      </Box>
     ),
+    
     warnings: (
-      <Card>
-        <CardHeader p={4}>
-          <HStack justify="space-between">
-            <Heading size="sm">Предупреждения</Heading>
-            <Button variant="ghost" size="sm" onClick={() => toggleWidget('warnings')}>
-              <Icon as={AlertTriangle} boxSize={4} />
+      <Box className="modern-card">
+        <HStack justify="space-between" align="center" mb={4}>
+          <Text className="text-lg font-semibold text-gray-800">
+            Предупреждения
+          </Text>
+          <Button 
+            className="modern-button-secondary"
+            size="sm" 
+            onClick={() => toggleWidget('warnings')}
+          >
+            <AlertTriangle size={16} />
             </Button>
           </HStack>
-        </CardHeader>
-        <CardBody pt={0} px={4} pb={4}>
+        
           {loadingAny ? (
-            <VStack align="stretch" spacing={3}><Skeleton height="44px" /><Skeleton height="44px" /></VStack>
+          <VStack align="stretch" spacing={3}>
+            <Box className="h-12 bg-gray-200 rounded-xl animate-pulse" />
+            <Box className="h-12 bg-gray-200 rounded-xl animate-pulse" />
+          </VStack>
           ) : (
           <VStack align="stretch" spacing={3}>
-            <HStack p={3} bg="red.50" rounded="md" borderWidth="1px" borderColor="red.200">
-              <Icon as={AlertTriangle} boxSize={4} color="red.500" />
-                <Text fontSize="sm" color="red.700">Просрочено задач: {overdueCount}</Text>
+            {overdueCount > 0 && (
+              <HStack p={4} className="bg-red-50 rounded-xl border border-red-200">
+                <AlertTriangle size={20} color="#FF9AA2" />
+                <Text className="text-sm text-red-700">
+                  Просрочено задач: {overdueCount}
+                </Text>
             </HStack>
-            <HStack p={3} bg="orange.50" rounded="md" borderWidth="1px" borderColor="orange.200">
-              <Icon as={Bell} boxSize={4} color="orange.500" />
-              <Text fontSize="sm" color="orange.700">Непрочитанных уведомлений: {unreadCount}</Text>
+            )}
+            
+            {absentEmployees.length > 0 && (
+              <HStack p={4} className="bg-orange-50 rounded-xl border border-orange-200">
+                <Users size={20} color="#FFB3BA" />
+                <Text className="text-sm text-orange-700">
+                  Не вышли на работу: {absentEmployees.length} чел.
+                </Text>
             </HStack>
+            )}
+            
+            {idleEmployees.length > 0 && (
+              <HStack p={4} className="bg-yellow-50 rounded-xl border border-yellow-200">
+                <Clock size={20} color="#FFD93D" />
+                <Text className="text-sm text-yellow-700">
+                  Сотрудников в простое: {idleEmployees.length} чел.
+                </Text>
+              </HStack>
+            )}
+            
+            {inactiveObjects.length > 0 && (
+              <HStack p={4} className="bg-blue-50 rounded-xl border border-blue-200">
+                <Building size={20} color="#A5B4FC" />
+                <Text className="text-sm text-blue-700">
+                  Объектов без активных задач: {inactiveObjects.length}
+                </Text>
+              </HStack>
+            )}
+            
+            {overdueCount === 0 && absentEmployees.length === 0 && idleEmployees.length === 0 && inactiveObjects.length === 0 && (
+              <HStack p={4} className="bg-green-50 rounded-xl border border-green-200">
+                <CheckSquare size={20} color="#86EFAC" />
+                <Text className="text-sm text-green-700">
+                  Все в порядке! Нет критических предупреждений
+                </Text>
+              </HStack>
+            )}
           </VStack>
           )}
-        </CardBody>
-      </Card>
+      </Box>
     ),
+    
     charts: (
-      <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={4}>
-        <Card>
-          <CardHeader p={4}>
-            <HStack justify="space-between" align="center">
-              <Heading size="sm">Статус задач (помесячно)</Heading>
-              <HStack>
+      <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={6}>
+        <Box className="modern-chart-card">
+          <HStack justify="space-between" align="center" mb={4}>
+            <Text className="text-lg font-semibold text-gray-800">
+              Статус задач (помесячно)
+            </Text>
+            <HStack spacing={2}>
                 <FormControl maxW="44">
-                  <FormLabel htmlFor="fromMonth" mb={1}>С месяца</FormLabel>
-                  <Input id="fromMonth" type="month" aria-label="С месяца" title="С месяца" value={fromMonth} max={toMonth || undefined} onChange={(e)=> setFromMonth(e.target.value)} />
+                <FormLabel className="text-sm text-gray-600 mb-1">С месяца</FormLabel>
+                <Input 
+                  type="month" 
+                  className="modern-search"
+                  value={fromMonth} 
+                  max={toMonth || undefined} 
+                  onChange={(e)=> setFromMonth(e.target.value)} 
+                />
                 </FormControl>
                 <FormControl maxW="44">
-                  <FormLabel htmlFor="toMonth" mb={1}>По месяц</FormLabel>
-                  <Input id="toMonth" type="month" aria-label="По месяц" title="По месяц" value={toMonth} min={fromMonth || undefined} onChange={(e)=> setToMonth(e.target.value)} />
+                <FormLabel className="text-sm text-gray-600 mb-1">По месяц</FormLabel>
+                <Input 
+                  type="month" 
+                  className="modern-search"
+                  value={toMonth} 
+                  min={fromMonth || undefined} 
+                  onChange={(e)=> setToMonth(e.target.value)} 
+                />
                 </FormControl>
               </HStack>
             </HStack>
-          </CardHeader>
-          <CardBody pt={0} px={4} pb={4}>
+          
             {tLoading ? (
-              <Skeleton height="220px" />
+            <Box className="h-64 bg-gray-200 rounded-xl animate-pulse" />
             ) : (
               <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={taskMonthlyPeriod}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" tickFormatter={formatMonthLabel} />
-                  <YAxis allowDecimals={false} />
-                  <RTooltip formatter={(v:any, n:any)=>[v, (STATUS_RU as any)[n] ?? n]} labelFormatter={(l)=>`Месяц: ${formatMonthLabel(l as any)}`} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="month" tickFormatter={formatMonthLabel} stroke="#6b7280" />
+                <YAxis allowDecimals={false} stroke="#6b7280" />
+                <RTooltip 
+                  formatter={(v:any, n:any)=>[v, (STATUS_RU as any)[n] ?? n]} 
+                  labelFormatter={(l)=>`Месяц: ${formatMonthLabel(l as any)}`}
+                  contentStyle={{
+                    backgroundColor: 'white',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                  }}
+                />
                   <Legend formatter={(v)=> (STATUS_RU as any)[v] ?? v} />
-                  <Line type="monotone" dataKey="new" name="Новые" stroke="#6ea96f" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="in_progress" name="В работе" stroke="#2d6c3f" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="overdue" name="Просрочены" stroke="#e53e3e" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="done" name="Завершены" stroke="#94a3b8" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="new" name="Новые" stroke="#B5EAD7" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="in_progress" name="В работе" stroke="#C7CEEA" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="overdue" name="Просрочены" stroke="#FF9AA2" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="done" name="Завершены" stroke="#D5AAFF" strokeWidth={2} dot={false} />
                 </LineChart>
             </ResponsiveContainer>
             )}
-          </CardBody>
-        </Card>
-        <Card>
-          <CardHeader p={4}>
-            <Heading size="sm">Расходы по месяцам (линии)</Heading>
-          </CardHeader>
-          <CardBody pt={0} px={4} pb={4}>
+        </Box>
+        
+        <Box className="modern-chart-card">
+          <HStack justify="space-between" align="center" mb={4}>
+            <Text className="text-lg font-semibold text-gray-800">
+              Расходы по месяцам
+            </Text>
+          </HStack>
+          
             {(pLoading || sLoading || aLoading) ? (
-              <Skeleton height="220px" />
+            <Box className="h-64 bg-gray-200 rounded-xl animate-pulse" />
             ) : (
               <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={financeMonthlyPeriod}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" tickFormatter={formatMonthLabel} />
-                  <YAxis tickFormatter={(v)=>`₽${Number(v).toLocaleString('ru-RU')}`} />
-                  <RTooltip formatter={(v:any, n:any)=>[`₽${Number(v).toLocaleString('ru-RU')}`, (LEGEND_RU as any)[n] ?? n]} labelFormatter={(l)=>`Месяц: ${formatMonthLabel(l as any)}`} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="month" tickFormatter={formatMonthLabel} stroke="#6b7280" />
+                <YAxis tickFormatter={(v)=>`₽${Number(v).toLocaleString('ru-RU')}`} stroke="#6b7280" />
+                <RTooltip 
+                  formatter={(v:any, n:any)=>[`₽${Number(v).toLocaleString('ru-RU')}`, (LEGEND_RU as any)[n] ?? n]} 
+                  labelFormatter={(l)=>`Месяц: ${formatMonthLabel(l as any)}`}
+                  contentStyle={{
+                    backgroundColor: 'white',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                  }}
+                />
                   <Legend formatter={(v)=> (LEGEND_RU as any)[v] ?? v} />
-                  <Line type="monotone" dataKey="purchases" name="Закупки" stroke="#3a8547" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="salaries" name="Зарплаты" stroke="#2d6c3f" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="absences" name="Удержания/Авансы" stroke="#94a3b8" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="purchases" name="Закупки" stroke="#B5EAD7" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="salaries" name="Зарплаты" stroke="#C7CEEA" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="absences" name="Удержания/Авансы" stroke="#D5AAFF" strokeWidth={2} dot={false} />
                 </LineChart>
             </ResponsiveContainer>
             )}
-          </CardBody>
-        </Card>
+        </Box>
       </SimpleGrid>
     ),
+    
     employees: (
-      <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
-        <Card>
-          <CardHeader p={4}><Heading size="sm">ТОП‑5 продуктивных</Heading></CardHeader>
-          <CardBody pt={0} px={4} pb={4}>
-            {uLoading || tLoading ? <SkeletonText noOfLines={5} /> : (
+      <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6}>
+        <Box className="modern-card">
+          <Text className="text-lg font-semibold text-gray-800 mb-4">
+            ТОП‑5 продуктивных
+          </Text>
+          {uLoading || tLoading ? (
+            <VStack align="stretch" spacing={2}>
+              {[1,2,3,4,5].map(i => (
+                <Box key={i} className="h-8 bg-gray-200 rounded animate-pulse" />
+              ))}
+            </VStack>
+          ) : (
               <VStack align="stretch" spacing={2}>
                 {topProductive.map(u => (
-                  <HStack key={u.id} justify="space-between">
-                    <Text>{u.name}</Text>
-                    <Badge colorScheme="green">{u.count}</Badge>
+                <HStack key={u.id} justify="space-between" p={3} className="bg-gray-50 rounded-lg">
+                  <Text className="text-gray-800">{u.name}</Text>
+                  <Box className="modern-badge-success">
+                    {u.count}
+                  </Box>
                   </HStack>
                 ))}
               </VStack>
             )}
-          </CardBody>
-        </Card>
-        <Card>
-          <CardHeader p={4}><Heading size="sm">ТОП‑5 с простоем</Heading></CardHeader>
-          <CardBody pt={0} px={4} pb={4}>
-            {uLoading || tLoading ? <SkeletonText noOfLines={5} /> : (
+        </Box>
+        
+        <Box className="modern-card">
+          <Text className="text-lg font-semibold text-gray-800 mb-4">
+            ТОП‑5 с простоем
+          </Text>
+          {uLoading || tLoading ? (
+            <VStack align="stretch" spacing={2}>
+              {[1,2,3,4,5].map(i => (
+                <Box key={i} className="h-8 bg-gray-200 rounded animate-pulse" />
+              ))}
+            </VStack>
+          ) : (
               <VStack align="stretch" spacing={2}>
                 {topIdle.map(u => (
-                  <HStack key={u.id} justify="space-between">
-                    <Text>{u.name}</Text>
-                    <Badge>{u.count}</Badge>
+                <HStack key={u.id} justify="space-between" p={3} className="bg-gray-50 rounded-lg">
+                  <Text className="text-gray-800">{u.name}</Text>
+                  <Box className="modern-badge">
+                    {u.count}
+                  </Box>
                   </HStack>
                 ))}
               </VStack>
             )}
-          </CardBody>
-        </Card>
+        </Box>
       </SimpleGrid>
     ),
+    
     materials: (
-      <Card>
-        <CardHeader p={4}>
-          <HStack justify="space-between">
-            <Heading size="sm">Материалы: ТОП по закупкам</Heading>
-            <Icon as={Package} boxSize={4} color="brand.500" />
+      <Box className="modern-card">
+        <HStack justify="space-between" align="center" mb={4}>
+          <Text className="text-lg font-semibold text-gray-800">
+            Материалы: ТОП по закупкам
+          </Text>
+          <Package size={20} color="#6b7280" />
           </HStack>
-        </CardHeader>
-        <CardBody pt={0} px={4} pb={4}>
-          {pLoading ? <SkeletonText noOfLines={5} /> : (
+        
+        {pLoading ? (
+          <VStack align="stretch" spacing={2}>
+            {[1,2,3,4,5].map(i => (
+              <Box key={i} className="h-8 bg-gray-200 rounded animate-pulse" />
+            ))}
+          </VStack>
+        ) : (
             <VStack align="stretch" spacing={2}>
               {topMaterials.map((m: any) => (
-                <HStack as={Link} to="/finances" key={m.name} justify="space-between" _hover={{ bg: 'gray.50' }} p={1} rounded="md">
-                  <Text>{m.name}</Text>
-                  <HStack>
-                    <Badge variant="subtle">{m.count} шт.</Badge>
-                    <Text color="text.secondary">₽{Number(m.total).toLocaleString('ru-RU')}</Text>
+              <HStack 
+                as={Link} 
+                to="/finances" 
+                key={m.name} 
+                justify="space-between" 
+                p={3} 
+                className="bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <Text className="text-gray-800">{m.name}</Text>
+                <HStack spacing={2}>
+                  <Box className="modern-badge">
+                    {m.count} шт.
+                  </Box>
+                  <Text className="text-gray-600">₽{Number(m.total).toLocaleString('ru-RU')}</Text>
                   </HStack>
                 </HStack>
               ))}
-              <Button as={Link} to="/finances" variant="ghost" size="sm">Открыть закупки</Button>
+            <Button 
+              className="modern-button-secondary w-full"
+              as={Link} 
+              to="/finances"
+            >
+              Открыть закупки
+            </Button>
             </VStack>
           )}
-        </CardBody>
-      </Card>
+      </Box>
     ),
+    
     notifications: (
-      <Card>
-        <CardHeader p={4}>
-          <HStack justify="space-between">
-            <Heading size="sm">Уведомления</Heading>
-            <Badge colorScheme={unreadCount ? 'orange' : 'gray'}>{unreadCount}</Badge>
+      <Box className="modern-card">
+        <HStack justify="space-between" align="center" mb={4}>
+          <HStack spacing={3}>
+            <Box className="relative">
+              <Bell size={20} color="#6b7280" />
+              {actualUnreadCount > 0 && (
+                <Box
+                  position="absolute"
+                  top="-2"
+                  right="-2"
+                  className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold"
+                >
+                  {actualUnreadCount > 99 ? '99+' : actualUnreadCount}
+                </Box>
+              )}
+            </Box>
+            <Text className="text-lg font-semibold text-gray-800">
+              Уведомления
+            </Text>
           </HStack>
-        </CardHeader>
-        <CardBody pt={0} px={4} pb={4}>
-          {loadingAny ? <SkeletonText noOfLines={5} /> : (
+          <Button
+            className="modern-button-secondary"
+            size="sm"
+            onClick={() => setIsNotificationsOpen(true)}
+          >
+            Все уведомления
+          </Button>
+        </HStack>
+        
+        {loadingAny ? (
+          <VStack align="stretch" spacing={2}>
+            {[1,2,3,4,5].map(i => (
+              <Box key={i} className="h-8 bg-gray-200 rounded animate-pulse" />
+            ))}
+          </VStack>
+        ) : (
             <VStack align="stretch" spacing={2}>
               {notificationsDerived.slice(0,5).map((n) => {
                 const to = n.id.startsWith('t-') || n.id.startsWith('td-') ? `/tasks/${n.id.split('-')[1]}` : n.id.startsWith('p-') ? '/finances' : '/notifications';
                 return (
-                <HStack as={Link} to={to} key={n.id} justify="space-between" _hover={{ bg: 'gray.50' }} p={1} rounded="md">
-                  <Text>{n.title ?? 'Событие'}</Text>
-                  <Badge colorScheme={n.type === 'warning' ? 'orange' : n.type === 'error' ? 'red' : n.type === 'success' ? 'green' : 'blue'}>{TYPE_RU[n.type] ?? 'Инфо'}</Badge>
+                <HStack 
+                  as={Link} 
+                  to={to} 
+                  key={n.id} 
+                  justify="space-between" 
+                  p={3} 
+                  className="bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                  onClick={() => markAsRead(n.id)}
+                >
+                  <VStack align="start" spacing={1} flex="1">
+                    <Text className="text-gray-800 text-sm">{n.title ?? 'Событие'}</Text>
+                    {n.date && (
+                      <Text className="text-gray-500 text-xs">
+                        {formatDateOnly(n.date)}
+                      </Text>
+                    )}
+                  </VStack>
+                  <VStack align="end" spacing={1}>
+                    <Box className={`modern-badge ${n.type === 'warning' ? 'modern-badge-warning' : n.type === 'error' ? 'modern-badge-warning' : n.type === 'success' ? 'modern-badge-success' : ''}`}>
+                      {TYPE_RU[n.type] ?? 'Инфо'}
+                    </Box>
+                    {!readNotifications.has(n.id) && (
+                      <Box className="w-2 h-2 bg-blue-500 rounded-full" />
+                    )}
+                  </VStack>
                 </HStack>
-              )})}
-              <Button as={Link} to="/notifications" size="sm" variant="ghost">Все уведомления</Button>
+              );
+            })}
+            {notificationsDerived.length === 0 && (
+              <Box className="text-center py-8">
+                <Bell size={32} color="#9ca3af" className="mx-auto mb-2" />
+                <Text className="text-gray-500">Нет уведомлений</Text>
+              </Box>
+            )}
             </VStack>
           )}
-        </CardBody>
-      </Card>
+      </Box>
     ),
+    
     map: (
-      <Card>
-        <CardHeader p={4}>
-          <HStack justify="space-between">
-            <Heading size="sm">Карта объектов</Heading>
-            <Icon as={MapIcon} boxSize={4} color="brand.500" />
+      <Box className="modern-card">
+        <HStack justify="space-between" align="center" mb={4}>
+          <VStack align="start" spacing={1}>
+            <Text className="text-lg font-semibold text-gray-800">
+              Карта объектов
+            </Text>
+            <Text className="text-sm text-gray-600">
+              Географическое расположение строительных объектов
+            </Text>
+          </VStack>
+          <MapIcon size={20} color="#6b7280" />
           </HStack>
-        </CardHeader>
-        <CardBody pt={0} px={0} pb={4}>
-          <Box position="relative" borderTopWidth="1px" borderColor="green.200" rounded="md" h="320px" overflow="hidden">
-            <LeafletMap objects={objects as any[]} loading={oLoading} />
+        
+        {/* Легенда карты */}
+        <HStack spacing={4} mb={4} className="bg-gray-50 p-3 rounded-lg">
+          <HStack spacing={2}>
+            <Box className="w-4 h-4 rounded-full bg-[#FF9AA2] border-2 border-white shadow-sm" />
+            <Text className="text-sm text-gray-600">Просроченные задачи</Text>
+          </HStack>
+          <HStack spacing={2}>
+            <Box className="w-4 h-4 rounded-full bg-[#B5EAD7] border-2 border-white shadow-sm" />
+            <Text className="text-sm text-gray-600">Активные задачи</Text>
+          </HStack>
+          <HStack spacing={2}>
+            <Box className="w-4 h-4 rounded-full bg-[#C7CEEA] border-2 border-white shadow-sm" />
+            <Text className="text-sm text-gray-600">Нет задач</Text>
+          </HStack>
+          <Button 
+            className="modern-button-secondary"
+            size="sm"
+            onClick={() => window.location.reload()}
+          >
+            Обновить карту
+          </Button>
+        </HStack>
+        
+        <Box className="border-t border-gray-200 rounded-lg overflow-hidden h-80">
+          <LeafletMap objects={objects as any[]} loading={oLoading} tasks={tasks as any[]} />
           </Box>
-        </CardBody>
-      </Card>
+      </Box>
     ),
+    
     tasks_table: (
-      <Card>
-        <CardHeader p={4}>
-          <HStack justify="space_between" align="center">
-            <Heading size="sm">Последние задачи</Heading>
-            <HStack>
+      <Box className="modern-card">
+        <HStack justify="space-between" align="center" mb={4}>
+          <Text className="text-lg font-semibold text-gray-800">
+            Последние задачи
+          </Text>
+          <HStack spacing={3}>
               <FormControl maxW="48">
-                <FormLabel id="ttStatusLabel" htmlFor="ttStatus">Статус</FormLabel>
-                <CSelect id="ttStatus" aria-labelledby="ttStatusLabel" aria-label="Фильтр по статусу" title="Фильтр по статусу" value={ttStatus} onChange={(e)=> setTtStatus(e.target.value)}>
+              <FormLabel className="text-sm text-gray-600 mb-1">Статус</FormLabel>
+              <CSelect 
+                value={ttStatus} 
+                onChange={(e)=> setTtStatus(e.target.value)}
+                className="modern-search"
+                aria-label="Фильтр по статусу"
+              >
                   <option value="all">Все</option>
                   <option value="new">Новые</option>
                   <option value="in_progress">В работе</option>
@@ -650,8 +1019,13 @@ export function Dashboard() {
                 </CSelect>
               </FormControl>
               <FormControl maxW="56">
-                <FormLabel id="ttAssigneeLabel" htmlFor="ttAssignee">Исполнитель</FormLabel>
-                <CSelect id="ttAssignee" aria-labelledby="ttAssigneeLabel" aria-label="Фильтр по исполнителю" title="Фильтр по исполнителю" value={ttAssignee} onChange={(e)=> setTtAssignee(e.target.value)}>
+              <FormLabel className="text-sm text-gray-600 mb-1">Исполнитель</FormLabel>
+              <CSelect 
+                value={ttAssignee} 
+                onChange={(e)=> setTtAssignee(e.target.value)}
+                className="modern-search"
+                aria-label="Фильтр по исполнителю"
+              >
                   <option value="all">Все</option>
                   {(users as any[]).map(u => (
                     <option key={u.id} value={u.id}>{u.full_name}</option>
@@ -660,20 +1034,24 @@ export function Dashboard() {
               </FormControl>
             </HStack>
           </HStack>
-        </CardHeader>
-        <CardBody pt={0} px={4} pb={4}>
-          {tLoading ? <SkeletonText noOfLines={6} /> : (
-            <Table size="sm" variant="stripedGreen">
-              <Thead>
-                <Tr>
-                  <Th>Задача</Th>
-                  <Th>Объект</Th>
-                  <Th>Исполнитель</Th>
-                  <Th>Срок</Th>
-                  <Th isNumeric>Статус</Th>
-                </Tr>
-              </Thead>
-              <Tbody>
+        
+        {tLoading ? (
+          <VStack align="stretch" spacing={2}>
+            {[1,2,3,4,5,6,7,8].map(i => (
+              <Box key={i} className="h-12 bg-gray-200 rounded animate-pulse" />
+            ))}
+          </VStack>
+        ) : (
+          <Box className="modern-table">
+            <Box className="modern-table-header">
+              <HStack justify="space-between" className="modern-table-cell">
+                <Text className="font-semibold text-gray-800">Задача</Text>
+                <Text className="font-semibold text-gray-800">Объект</Text>
+                <Text className="font-semibold text-gray-800">Исполнитель</Text>
+                <Text className="font-semibold text-gray-800">Срок</Text>
+                <Text className="font-semibold text-gray-800">Статус</Text>
+              </HStack>
+            </Box>
                 {((tasks as any[])
                   .filter((r:any)=> (ttStatus === 'all' || r.status === ttStatus) && (ttAssignee === 'all' || String(r.assignee_id) === ttAssignee))
                   .slice(0,8)).map((r:any)=> {
@@ -681,27 +1059,43 @@ export function Dashboard() {
                   const assignee = (users as any[]).find((u) => u.id === r.assignee_id);
                   const statusText = (STATUS_RU as any)[r.status ?? 'new'] ?? '—';
                   return (
-                    <Tr key={r.id}>
-                      <Td fontWeight={600} color="brand.500"><Link to={`/tasks/${r.id}`}>{r.title}</Link></Td>
-                      <Td>{obj ? <Link to={`/objects/${obj.id}`}>{obj.name}</Link> : '—'}</Td>
-                      <Td>{assignee ? <Link to={`/people/${assignee.id}`}>{assignee.full_name}</Link> : '—'}</Td>
-                      <Td>
+                <HStack 
+                  key={r.id} 
+                  className="modern-table-row modern-table-cell"
+                  justify="space-between"
+                >
+                  <Text className="font-semibold text-gray-800">
+                    <Link to={`/tasks/${r.id}`} className="text-green-600 hover:text-green-700">
+                      {r.title}
+                    </Link>
+                  </Text>
+                  <Text className="text-gray-800">
+                    {obj ? (
+                      <Link to={`/objects/${obj.id}`} className="text-green-600 hover:text-green-700">
+                        {obj.name}
+                      </Link>
+                    ) : '—'}
+                  </Text>
+                  <Text className="text-gray-800">
+                    {assignee ? (
+                      <Link to={`/people/${assignee.id}`} className="text-green-600 hover:text-green-700">
+                        {assignee.full_name}
+                      </Link>
+                    ) : '—'}
+                  </Text>
                         <VStack align="start" spacing={0}>
-                          <Text>{formatDateOnly(r.deadline)}</Text>
-                          <Text color="text.secondary">{formatTimeRange(r.start_time, r.end_time)}</Text>
+                    <Text className="text-gray-800">{formatDateOnly(r.deadline)}</Text>
+                    <Text className="text-gray-600 text-sm">{formatTimeRange(r.start_time, r.end_time)}</Text>
                         </VStack>
-                      </Td>
-                      <Td isNumeric>
-                        <Badge colorScheme={r.status === 'overdue' ? 'red' : r.status === 'done' ? 'green' : r.status === 'in_progress' ? 'blue' : 'gray'}>{statusText}</Badge>
-                      </Td>
-                    </Tr>
+                  <Box className={`modern-badge ${r.status === 'overdue' ? 'modern-badge-warning' : r.status === 'done' ? 'modern-badge-success' : r.status === 'in_progress' ? 'modern-badge' : 'modern-badge'}`}>
+                    {statusText}
+                  </Box>
+                </HStack>
                   );
                 })}
-              </Tbody>
-            </Table>
+          </Box>
           )}
-        </CardBody>
-      </Card>
+      </Box>
     ),
   };
 
@@ -711,75 +1105,92 @@ export function Dashboard() {
   };
 
   return (
-    <Box as="main" role="main" display="flex" flexDirection="column" gap={6} className="animate-fade-in" maxW="1200px" mx="auto">
+    <Box className="bg-gray-50 min-h-screen p-6">
+      {/* Современный хедер */}
+      <Box className="modern-header mb-8">
       <HStack justify="space-between" align="center">
-        <Box>
-          <Heading size="lg" color="brand.500">Дашборд</Heading>
-          <Text color="text.secondary" mt={1}>Обзор компании и ключевые показатели</Text>
-        </Box>
-        <HStack spacing={3}>
-          <Box position="relative">
+          <VStack align="start" spacing={1}>
+            <Text className="text-2xl font-bold text-gray-800">
+              Дашборд
+            </Text>
+            <Text className="text-gray-600">
+              {user?.position || 'Администратор'}
+            </Text>
+          </VStack>
+          
+          {/* Поиск, уведомления и настройки */}
+          <HStack spacing={4}>
             <Input 
-              placeholder="Быстрый поиск..." 
+              className="modern-search w-80"
+              placeholder="Поиск..."
               value={q} 
               onChange={(e) => setQ(e.target.value)}
-              maxW="300px"
             />
-            {q && searchMatches.length > 0 && (
-              <Box position="absolute" zIndex={50} mt={1} w="full" rounded="md" borderWidth="1px" bg="white" p={2} maxH="60" overflowY="auto" boxShadow="card">
-                {searchMatches.map((m, idx) => (
-                  <Box key={idx} fontSize="sm" px={2} py={1} _hover={{ bg: "table.rowAlt" }} rounded="md">
-                    <Link to={m.to} onClick={() => setQ("")}>
-                      <Box as="span" color="text.secondary" mr={2}>{m.type}:</Box> {m.label}
-                    </Link>
-                  </Box>
-                ))}
+            
+            {/* Колокольчик уведомлений */}
+            <Button
+              className="modern-button-blue"
+              size="sm"
+              onClick={() => setIsNotificationsOpen(true)}
+              position="relative"
+            >
+              <Bell size={16} />
+              {actualUnreadCount > 0 && (
+                <Box
+                  position="absolute"
+                  top="-2"
+                  right="-2"
+                  className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold"
+                >
+                  {actualUnreadCount > 99 ? '99+' : actualUnreadCount}
               </Box>
             )}
-          </Box>
-          <Button variant="outline" onClick={() => setIsSettingsOpen(true)}>
-            <Icon as={SettingsIcon} boxSize={4} mr={2} />
+            </Button>
+            
+            <Button 
+              className="modern-button-green"
+              size="sm"
+              onClick={() => setIsSettingsOpen(true)}
+            >
+              <SettingsIcon size={16} />
             Настроить
           </Button>
         </HStack>
       </HStack>
+      </Box>
 
-      {/* Информация о пользователе */}
-      {user && (
-        <Card variant="outline" bg="blue.50" borderColor="blue.200">
-          <CardBody p={4}>
-            <HStack justify="space-between" align="center">
+      {/* Поиск результаты */}
+      {q && searchMatches.length > 0 && (
+        <Box className="modern-card mb-6">
+          <VStack align="stretch" spacing={3}>
+            <Text className="font-semibold text-gray-800">Результаты поиска</Text>
+            {searchMatches.map((m, idx) => (
+              <HStack
+                key={idx}
+                as={Link}
+                to={m.to}
+                onClick={() => setQ("")}
+                className="p-4 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors"
+                justify="space-between"
+              >
               <VStack align="start" spacing={1}>
-                <HStack spacing={3}>
-                  <Text fontWeight="medium" color="blue.700">
-                    Добро пожаловать, {user.full_name}!
+                  <Text className="text-gray-500 text-sm">
+                    {m.type}
                   </Text>
-                  <Badge colorScheme="blue" variant="subtle">
-                    {user.position || 'Должность не указана'}
-                  </Badge>
-                  <Badge colorScheme="green" variant="subtle">
-                    {userRole ? getRoleName(userRole) : 'Роль не назначена'}
-                  </Badge>
-                </HStack>
-                <Text fontSize="sm" color="blue.600">
-                  Ваши права: {userPermissions.length > 0 ? userPermissions.map(p => p.name).join(', ') : 'Базовые права'}
+                  <Text className="font-medium text-gray-800">
+                    {m.label}
                 </Text>
               </VStack>
-              <HStack spacing={2}>
-                <Text fontSize="sm" color="blue.600">
-                  Телефон: {user.phone || 'Не указан'}
-                </Text>
-                {user.is_admin && (
-                  <Badge colorScheme="red" variant="solid">
-                    Администратор
-                  </Badge>
-                )}
+                <Box className="modern-badge">
+                  Открыть
+                </Box>
               </HStack>
-            </HStack>
-          </CardBody>
-        </Card>
+            ))}
+          </VStack>
+        </Box>
       )}
 
+      {/* Виджеты */}
       <VStack spacing={6} align="stretch">
         <AnimatePresence>
         {cfg.order
@@ -805,16 +1216,19 @@ export function Dashboard() {
 
       {/* Модалка настроек дашборда */}
       <Modal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} size="lg">
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Настройки дашборда</ModalHeader>
+        <ModalOverlay bg="blackAlpha.600" />
+        <ModalContent className="modern-card">
+          <ModalHeader className="text-gray-800">Настройки дашборда</ModalHeader>
           <ModalCloseButton />
           <ModalBody>
-            <Text fontSize="sm" color="text.secondary" mb={3}>Выберите, какие виджеты показывать. Порядок можно менять перетаскиванием на странице.</Text>
+            <Text className="text-gray-600 text-sm mb-4">
+              Выберите, какие виджеты показывать. Порядок можно менять перетаскиванием на странице.
+            </Text>
             <VStack align="stretch" spacing={2}>
               {ALL_WIDGETS.map((key) => (
-                <HStack key={key} justify="space-between" py={1}>
-                  <Text textTransform="none">{(
+                <HStack key={key} justify="space-between" py={2}>
+                  <Text className="text-gray-800">
+                    {(
                     {
                       kpi: "Сводка",
                       map: "Карта объектов",
@@ -827,67 +1241,281 @@ export function Dashboard() {
                       charts: "Графики",
                       notifications: "Уведомления",
                     } as Record<DashboardWidgetKey, string>
-                  )[key]}</Text>
+                    )[key]}
+                  </Text>
                   <Checkbox
                     isChecked={!cfg.hidden.includes(key)}
                     onChange={() => toggleWidget(key)}
+                    colorScheme="green"
                     aria-label={`Переключить видимость: ${key}`}
-                  >Показать</Checkbox>
+                  />
                 </HStack>
               ))}
             </VStack>
           </ModalBody>
           <ModalFooter>
             <HStack spacing={3}>
-              <Button variant="ghost" onClick={async () => { const next = { ...DEFAULT_DASHBOARD_CONFIG }; setCfg(next); await saveDashboardConfig(next); }}>Сбросить по умолчанию</Button>
-              <Button onClick={() => setIsSettingsOpen(false)}>Готово</Button>
+              <Button
+                className="modern-button-secondary"
+                onClick={async () => {
+                  const next = { ...DEFAULT_DASHBOARD_CONFIG };
+                  setCfg(next);
+                  await saveDashboardConfig(next);
+                }}
+              >
+                Сбросить
+              </Button>
+              <Button
+                className="modern-button"
+                onClick={() => setIsSettingsOpen(false)}
+              >
+                Готово
+              </Button>
             </HStack>
           </ModalFooter>
         </ModalContent>
       </Modal>
+
+      {/* Модальное окно уведомлений */}
+      <NotificationsModal
+        isOpen={isNotificationsOpen}
+        onClose={() => setIsNotificationsOpen(false)}
+        notifications={notificationsDerived}
+        unreadCount={actualUnreadCount}
+        loading={loadingAny}
+        onMarkAsRead={markAsRead}
+        onMarkAllAsRead={markAllAsRead}
+        formatDateOnly={formatDateOnly}
+        TYPE_RU={TYPE_RU}
+        readNotifications={readNotifications}
+      />
     </Box>
   );
 }
 
-function LeafletMap({ objects, loading }: { objects: any[]; loading: boolean }) {
-  // отрисовываем карту после mount
-  const mapId = "map_" + Math.random().toString(36).slice(2);
-  const [ready, setReady] = useState(false);
-
-  useMemo(() => { setReady(true); }, []);
-
-  useMemo(() => {
-    if (!ready || typeof window === 'undefined' || !(window as any).L) return;
-    const L = (window as any).L as any;
-    const container = document.getElementById(mapId);
-    if (!container) return;
+function LeafletMap({ objects, loading, tasks }: { objects: any[]; loading: boolean; tasks: any[] }) {
+  const mapId = useMemo(() => "map_" + Math.random().toString(36).slice(2), []);
+  const [mapData, setMapData] = useState<Array<{
+    object: any;
+    position: { lat: number; lon: number };
+    tasks: any[];
+  }>>([]);
+  const mapRef = useRef<any>(null);
+  
+  // Подготовка данных для карты
+  useEffect(() => {
+    const prepareMapData = async () => {
+      console.log('=== ПОДГОТОВКА ДАННЫХ КАРТЫ ===');
+      console.log('Объекты:', objects);
+      console.log('Задачи:', tasks);
+      
+      if (!objects.length) {
+        console.log('Нет объектов для отображения');
+        return;
+      }
+      
+      const data = [];
+      let processedCount = 0;
+      let geocodedCount = 0;
+      
+      // Обрабатываем реальные объекты
+      for (const obj of objects.slice(0, 15)) { // Ограничиваем для производительности
+        processedCount++;
+        const addr = obj.address || obj.name;
+        if (!addr) {
+          console.log(`Объект ${obj.id} (${obj.name}) не имеет адреса`);
+          continue;
+        }
+        
+        console.log(`Геокодируем: ${addr}`);
+        const position = await geocodeAddress(addr);
+        if (!position) {
+          console.log(`Не удалось геокодировать адрес: ${addr}`);
+          continue;
+        }
+        
+        geocodedCount++;
+        // Получаем задачи для этого объекта
+        const objectTasks = tasks.filter((t: any) => t.object_id === obj.id);
+        
+        data.push({
+          object: obj,
+          position,
+          tasks: objectTasks
+        });
+        
+        console.log(`Успешно добавлен объект: ${obj.name} -> ${position.lat}, ${position.lon} (${objectTasks.length} задач)`);
+      }
+      
+      console.log(`Обработано: ${processedCount}, геокодировано: ${geocodedCount}, объектов на карте: ${data.length}`);
+      setMapData(data);
+    };
+    
+    prepareMapData();
+  }, [objects, tasks]);
 
     // Инициализация карты
-    const map = L.map(container).setView([55.7558, 37.6173], 10); // Москва по умолчанию
+  useEffect(() => {
+    if (typeof window === 'undefined' || !(window as any).L || !mapData.length) {
+      console.log('Карта не инициализируется:', {
+        window: typeof window !== 'undefined',
+        L: !!(window as any).L,
+        mapDataLength: mapData.length
+      });
+      return;
+    }
+    
+    const timer = setTimeout(() => {
+      const L = (window as any).L;
+      const container = document.getElementById(mapId);
+      if (!container) {
+        console.log('Контейнер карты не найден');
+        return;
+      }
+      
+      // Удаляем предыдущую карту, если она существует
+      if (mapRef.current) {
+        try {
+          mapRef.current.remove();
+        } catch (error) {
+          console.log('Ошибка при удалении предыдущей карты:', error);
+        }
+        mapRef.current = null;
+      }
+      
+      // Очищаем контейнер
+      container.innerHTML = '';
+      
+      console.log('Создаем карту с реальными данными...');
+      console.log('MapData:', mapData);
+      
+      try {
+        const map = L.map(container).setView([61.0042, 69.0019], 10); // Ханты-Мансийск
+        mapRef.current = map;
+        
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
-      attribution: '© OpenStreetMap'
+          attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
     const group = L.layerGroup().addTo(map);
 
-    (async () => {
-      for (const o of objects.slice(0, 20)) {
-        const addr = o.address || o.name;
-        if (!addr) continue;
-        const pt = await geocodeAddress(addr);
-        if (!pt) continue;
-        const marker = L.marker([pt.lat, pt.lon]).bindPopup(`<b>${o.name}</b><br/>${addr}<br/><a href="/objects/${o.id}" target="_self" rel="noopener">Открыть объект</a><br/><a href="https://www.openstreetmap.org/?mlat=${pt.lat}&mlon=${pt.lon}#map=16/${pt.lat}/${pt.lon}" target="_blank" rel="noopener">Открыть в OpenStreetMap</a>`);
-        group.addLayer(marker);
-      }
+        // Создаем маркеры для реальных объектов
+        mapData.forEach(({ object, position, tasks }) => {
+          console.log(`Создаем маркер для: ${object.name} на ${position.lat}, ${position.lon}`);
+          const activeTasks = tasks.filter((t: any) => t.status !== 'done').length;
+          const overdueTasks = tasks.filter((t: any) => t.status === 'overdue').length;
+          
+          // Создаем кастомную иконку в зависимости от статуса
+          const iconColor = overdueTasks > 0 ? '#FF9AA2' : activeTasks > 0 ? '#B5EAD7' : '#C7CEEA';
+          
+          const customIcon = L.divIcon({
+            html: `<div style="background: ${iconColor}; width: 30px; height: 30px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px;">${activeTasks > 0 ? activeTasks : '0'}</div>`,
+            iconSize: [30, 30],
+            iconAnchor: [15, 15]
+          });
+          
+          // Создаем содержимое попапа
+          const popupContent = `
+            <div style="min-width: 250px; font-family: system-ui;">
+              <h3 style="margin: 0 0 8px 0; color: #374151; font-size: 16px; font-weight: 600;">
+                ${object.name}
+              </h3>
+              <p style="margin: 0 0 12px 0; color: #6b7280; font-size: 14px;">
+                ${object.address || 'Адрес не указан'}
+              </p>
+              <div style="margin: 0 0 12px 0;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                  <span style="color: #6b7280;">Активных задач:</span>
+                  <span style="color: #374151; font-weight: 600;">${activeTasks}</span>
+                </div>
+                ${overdueTasks > 0 ? `
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="color: #dc2626;">Просрочено:</span>
+                    <span style="color: #dc2626; font-weight: 600;">${overdueTasks}</span>
+                  </div>
+                ` : ''}
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <a href="/objects/${object.id}" 
+                   style="background: #3f6b4e; color: white; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 12px; font-weight: 500;"
+                   target="_self">
+                  Открыть объект
+                </a>
+                <a href="/tasks?object=${object.id}" 
+                   style="background: #9bbf87; color: white; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 12px; font-weight: 500;"
+                   target="_self">
+                  Задачи
+                </a>
+              </div>
+            </div>
+          `;
+          
+          L.marker([position.lat, position.lon], { icon: customIcon })
+            .addTo(group)
+            .bindPopup(popupContent, { maxWidth: 300 });
+        });
+        
+        // Подгоняем карту под все маркеры
       try {
         const bounds = group.getBounds();
-        if (bounds && bounds.isValid()) map.fitBounds(bounds.pad(0.2));
-      } catch {}
-    })();
+          if (bounds && bounds.isValid()) {
+            map.fitBounds(bounds.pad(0.1));
+            console.log('Карта подогнана под маркеры');
+          }
+        } catch (error) {
+          console.error('Ошибка при подгонке карты:', error);
+        }
+        
+        console.log('Карта с реальными данными создана!');
+      } catch (error) {
+        console.error('Ошибка при создании карты:', error);
+      }
+    }, 500);
+    
+    return () => {
+      clearTimeout(timer);
+      if (mapRef.current) {
+        try {
+          mapRef.current.remove();
+        } catch (error) {
+          console.log('Ошибка при очистке карты:', error);
+        }
+        mapRef.current = null;
+      }
+    };
+  }, [mapId, mapData]);
 
-    return () => { map.remove(); };
-  }, [ready, objects]);
+  if (loading) {
+    return (
+      <Box className="h-80 bg-gray-200 rounded-xl animate-pulse flex items-center justify-center">
+        <Text className="text-gray-600">Загрузка карты...</Text>
+      </Box>
+    );
+  }
+
+  if (!objects.length) {
+    return (
+      <Box className="h-80 bg-gray-50 rounded-xl flex items-center justify-center">
+        <VStack spacing={3}>
+          <MapIcon size={48} color="#9ca3af" />
+          <Text className="text-gray-600">Объекты не найдены</Text>
+        </VStack>
+      </Box>
+    );
+  }
+
+  if (!mapData.length) {
+    return (
+      <Box className="h-80 bg-gray-50 rounded-xl flex items-center justify-center">
+        <VStack spacing={3}>
+          <MapIcon size={48} color="#9ca3af" />
+          <Text className="text-gray-600">Не удалось загрузить карту</Text>
+          <Text className="text-gray-500 text-sm">Проверьте адреса объектов</Text>
+        </VStack>
+      </Box>
+    );
+  }
 
   return (
     <Box id={mapId} w="100%" h="100%" aria-label="Карта объектов" title="Карта объектов" />

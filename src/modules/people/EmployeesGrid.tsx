@@ -10,19 +10,26 @@ interface Props {
   onDelete: (id: number) => void;
 }
 
-const MotionGrid = motion(SimpleGrid);
+const MotionGrid = motion.create(SimpleGrid);
 
 const EmployeesGrid: React.FC<Props> = ({ users, onEdit, onDelete }) => {
   if (users.length === 0) {
     return (
-      <Box textAlign="center" py={12}>
-        <VStack spacing={4}>
-          <Text fontSize="lg" color="text.secondary" fontWeight="500">
-            Сотрудники не найдены
-          </Text>
-          <Text fontSize="sm" color="text.tertiary">
-            Попробуйте изменить параметры поиска
-          </Text>
+      <Box textAlign="center" py={16}>
+        <VStack spacing={6}>
+          <Box className="card-nature shadow-elevated" p={8} maxW="400px" mx="auto">
+            <VStack spacing={4}>
+              <Box p={4} bg="gray.100" borderRadius="xl">
+                <Text fontSize="4xl">👥</Text>
+              </Box>
+              <Text fontSize="lg" color="gray.700" fontWeight="600">
+                Сотрудники не найдены
+              </Text>
+              <Text fontSize="sm" color="gray.500" textAlign="center">
+                Попробуйте изменить параметры поиска или добавить нового сотрудника
+              </Text>
+            </VStack>
+          </Box>
         </VStack>
       </Box>
     );
@@ -31,7 +38,7 @@ const EmployeesGrid: React.FC<Props> = ({ users, onEdit, onDelete }) => {
   return (
     <MotionGrid
       columns={{ base: 1, md: 2, lg: 3, xl: 4 }}
-      spacing={6}
+      spacing={8}
       initial="hidden"
       animate="visible"
       variants={{
@@ -39,7 +46,7 @@ const EmployeesGrid: React.FC<Props> = ({ users, onEdit, onDelete }) => {
         visible: {
           opacity: 1,
           transition: {
-            staggerChildren: 0.15,
+            staggerChildren: 0.1,
             delayChildren: 0.1,
             duration: 0.8,
             ease: "easeOut"

@@ -518,6 +518,21 @@ export const OperationModal: React.FC<OperationModalProps> = ({
                   />
                 </FormControl>
                 
+                <FormControl>
+                  <FormLabel>Сотрудник (кому списано)</FormLabel>
+                  <Select 
+                    value={operationForm.user_id || ''} 
+                    onChange={(e) => setOperationForm(v => ({ ...v, user_id: e.target.value }))}
+                    title="Сотрудник"
+                    aria-label="Сотрудник"
+                  >
+                    <option value="">Не привязано к сотруднику</option>
+                    {users.map((u: any) => (
+                      <option key={u.id} value={u.id}>{u.full_name || u.username}</option>
+                    ))}
+                  </Select>
+                </FormControl>
+                
                 <FormControl isRequired>
                   <FormLabel>Объект</FormLabel>
                   <Select 
@@ -542,6 +557,76 @@ export const OperationModal: React.FC<OperationModalProps> = ({
                     placeholder="Причина списания материала"
                   />
                 </FormControl>
+
+                {/* Дополнительная опция для выдачи инструментов */}
+                {operationForm.user_id && (
+                  <FormControl>
+                    <FormLabel>Дополнительно выдать инструмент</FormLabel>
+                    <Select 
+                      value={operationForm.issue_tool || 'no'} 
+                      onChange={(e) => setOperationForm(v => ({ ...v, issue_tool: e.target.value }))}
+                      title="Выдать инструмент"
+                      aria-label="Выдать инструмент"
+                    >
+                      <option value="no">Только списать со склада</option>
+                      <option value="yes">Выдать инструмент сотруднику</option>
+                    </Select>
+                  </FormControl>
+                )}
+
+                {/* Поля для выдачи инструмента */}
+                {operationForm.issue_tool === 'yes' && (
+                  <>
+                    <FormControl>
+                      <FormLabel>Серийный номер инструмента</FormLabel>
+                      <Input 
+                        value={operationForm.tool_serial || ''} 
+                        onChange={(e) => setOperationForm(v => ({ ...v, tool_serial: e.target.value }))}
+                        placeholder="Серийный номер (если есть)"
+                      />
+                    </FormControl>
+                    
+                    <FormControl>
+                      <FormLabel>Тип инструмента</FormLabel>
+                      <Select 
+                        value={operationForm.tool_type || ''} 
+                        onChange={(e) => setOperationForm(v => ({ ...v, tool_type: e.target.value }))}
+                        title="Тип инструмента"
+                        aria-label="Тип инструмента"
+                      >
+                        <option value="">Выберите тип</option>
+                        <option value="hand_tool">Ручной инструмент</option>
+                        <option value="power_tool">Электроинструмент</option>
+                        <option value="measuring">Измерительный</option>
+                        <option value="safety">Средства защиты</option>
+                        <option value="other">Прочее</option>
+                      </Select>
+                    </FormControl>
+                    
+                    <FormControl>
+                      <FormLabel>Состояние при выдаче</FormLabel>
+                      <Select 
+                        value={operationForm.tool_condition || 'good'} 
+                        onChange={(e) => setOperationForm(v => ({ ...v, tool_condition: e.target.value }))}
+                        title="Состояние инструмента"
+                        aria-label="Состояние инструмента"
+                      >
+                        <option value="good">Хорошее</option>
+                        <option value="acceptable">Приемлемое</option>
+                        <option value="needs_repair">Требует ремонта</option>
+                      </Select>
+                    </FormControl>
+                    
+                    <FormControl>
+                      <FormLabel>Примечания к выдаче</FormLabel>
+                      <Textarea 
+                        value={operationForm.tool_notes || ''} 
+                        onChange={(e) => setOperationForm(v => ({ ...v, tool_notes: e.target.value }))}
+                        placeholder="Дополнительная информация об инструменте"
+                      />
+                    </FormControl>
+                  </>
+                )}
               </>
             )}
             

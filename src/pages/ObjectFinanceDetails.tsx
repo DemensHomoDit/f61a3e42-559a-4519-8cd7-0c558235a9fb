@@ -47,7 +47,7 @@ import {
 import { Helmet } from 'react-helmet-async';
 import { useFinanceData } from '@/modules/finances/hooks/useFinanceData';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getObjects, getUsers, createInvoice, createPurchaseAuto, createSalary, createWarehouseConsumption } from '@/api/client';
+import { getObjects, getUsers, createInvoice, createPurchaseAuto, createSalary, createWarehouseConsumption, createTool, createToolAssignment } from '@/api/client';
 import { 
   ArrowLeft, 
   TrendingUp, 
@@ -88,7 +88,13 @@ const ObjectFinanceDetails: React.FC = () => {
     item: '',
     quantity: '1',
     unit: 'шт',
-    unit_price: ''
+    unit_price: '',
+    // Новые поля для инструментов
+    issue_tool: 'no',
+    tool_serial: '',
+    tool_type: '',
+    tool_condition: 'good',
+    tool_notes: ''
   });
 
   // Хелпер для русских статусов
@@ -148,6 +154,30 @@ const ObjectFinanceDetails: React.FC = () => {
       toast({ title: 'Списание создано', status: 'success' });
       onClose();
       resetForm();
+    }
+  });
+
+  // Мутация для создания инструмента
+  const createToolMutation = useMutation({
+    mutationFn: createTool,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['tools'] });
+      toast({ title: 'Инструмент создан', status: 'success' });
+    },
+    onError: (error) => {
+      toast({ title: 'Ошибка создания инструмента', description: error.message, status: 'error' });
+    }
+  });
+
+  // Мутация для выдачи инструмента
+  const createToolAssignmentMutation = useMutation({
+    mutationFn: createToolAssignment,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['toolAssignments'] });
+      toast({ title: 'Инструмент выдан', status: 'success' });
+    },
+    onError: (error) => {
+      toast({ title: 'Ошибка выдачи инструмента', description: error.message, status: 'error' });
     }
   });
 
@@ -212,7 +242,13 @@ const ObjectFinanceDetails: React.FC = () => {
       item: '',
       quantity: '1',
       unit: 'шт',
-      unit_price: ''
+      unit_price: '',
+      // Новые поля для инструментов
+      issue_tool: 'no',
+      tool_serial: '',
+      tool_type: '',
+      tool_condition: 'good',
+      tool_notes: ''
     });
   };
 
@@ -258,8 +294,10 @@ const ObjectFinanceDetails: React.FC = () => {
         });
         break;
       case 'consumption':
+        // Создаем списание материалов
         createConsumptionMutation.mutate({
           object_id: Number(objectId),
+          user_id: operationForm.user_id ? Number(operationForm.user_id) : undefined,
           item_name: operationForm.item,
           quantity: Number(operationForm.quantity),
           unit: operationForm.unit,
@@ -268,6 +306,36 @@ const ObjectFinanceDetails: React.FC = () => {
           consumption_date: operationForm.date,
           reason: operationForm.description
         });
+
+        // Если выбрана опция выдачи инструмента, создаем запись в tool_assignments
+        if (operationForm.issue_tool === 'yes' && operationForm.user_id) {
+          // Сначала создаем запись в таблице tools
+          const toolData = {
+            name: operationForm.item || operationForm.new_item_name,
+            serial_number: operationForm.tool_serial || null,
+            type: operationForm.tool_type || 'other',
+            condition_status: operationForm.tool_condition || 'good',
+            location: 'Выдан сотруднику',
+            notes: operationForm.tool_notes || 'Автоматически создано при списании'
+          };
+
+          // Создаем инструмент в таблице tools
+          createToolMutation.mutate(toolData, {
+            onSuccess: (newTool) => {
+              // После создания инструмента создаем запись о выдаче
+              const assignmentData = {
+                tool_id: newTool.id,
+                user_id: Number(operationForm.user_id),
+                assigned_date: operationForm.date,
+                assigned_by: 1, // ID текущего пользователя (можно получить из контекста)
+                condition_out: operationForm.tool_condition || 'good',
+                notes: `Выдан при списании: ${operationForm.reason || operationForm.description}`
+              };
+
+              createToolAssignmentMutation.mutate(assignmentData);
+            }
+          });
+        }
         break;
     }
   };

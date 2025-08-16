@@ -1,4 +1,5 @@
 import { AppSidebar } from "@/components/AppSidebar";
+import { Outlet } from "react-router-dom";
 import { Building2, Bell, Settings, User, Sparkles, Plus, Menu as MenuIcon, LogOut, Search } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -59,12 +60,6 @@ export function Layout({ children }: LayoutProps) {
             <Button variant="ghost" size="sm" onClick={toggleSidebar}>
               <MenuIcon className="h-5 w-5" />
             </Button>
-            <div className="flex items-center gap-3">
-              <Building2 className="h-8 w-8 text-nature-young-spruce animate-leaf-float" />
-              <h1 className="font-bold text-xl bg-gradient-forest bg-clip-text text-transparent">
-                ПромСтрой Контроль
-              </h1>
-            </div>
           </div>
 
           <div className="flex-1 max-w-2xl mx-8 relative">
@@ -126,9 +121,11 @@ export function Layout({ children }: LayoutProps) {
         </header>
 
         <main className="flex-1 p-8">
-          {children}
+          {children ?? <Outlet />}
         </main>
       </div>
     </div>
   );
 }
+
+export default Layout;
